@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Unit tests
+        run: pytest -q
+      - name: End-to-end smoke test on the sample data
+        run: |
+          gtm --db ci.db init
+          gtm --db ci.db load --orgs data/sample/organizations.csv \
+            --people data/sample/people.csv --deals data/sample/deals.csv \
+            --signals data/sample/signals.csv --suppressions data/sample/suppressions.csv
+          gtm --db ci.db score --as-of 2026-10-26 --top 5 --out out.csv
+          gtm --db ci.db health --as-of 2026-10-26
+          gtm --db ci.db enrich --limit 20 --min-employees 20 --report report.md

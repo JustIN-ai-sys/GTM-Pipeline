@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+.env
+*.db
+out/
+data/private/
+.claude/settings.local.json
+RUNBOOK_FR.md
