@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from gtm_pipeline.db import connect
-from gtm_pipeline.enrich import apply_outcomes, parse_outcomes
+from gtm_pipeline.enrich import apply_outcomes, linkedin_index, parse_outcomes
 
 MAX_BODY_BYTES = 2_000_000
 WEBHOOK_PATH = "/webhook/fullenrich"
@@ -47,7 +47,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
             return
         conn = connect(self.db_path)
         try:
-            result = apply_outcomes(conn, parse_outcomes(body), source="fullenrich_webhook")
+            outcomes = parse_outcomes(body, linkedin_index(conn))
+            result = apply_outcomes(conn, outcomes, source="fullenrich_webhook")
         finally:
             conn.close()
         self._send(200, {"updated": result["stored"], "not_found": result["not_found"]})

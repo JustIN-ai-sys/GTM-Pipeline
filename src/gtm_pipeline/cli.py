@@ -1,8 +1,9 @@
-"""Command line: init, load, score, health, enrich, fetch, serve."""
+"""Command line: init, load, score, health, enrich, fetch, import-results, serve."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -106,15 +107,28 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         return 2
     conn = connect(args.db)
     body = enrich.fetch_results(args.enrichment_id, api_key)
-    status = str(body.get("status") or "").upper()
+    return _store_results(conn, body, "fullenrich_fetch", args.as_of)
+
+
+def cmd_import_results(args: argparse.Namespace) -> int:
+    conn = connect(args.db)
+    with open(args.file, encoding="utf-8") as handle:
+        body = json.load(handle)
+    return _store_results(conn, body, args.source, args.as_of)
+
+
+def _store_results(conn, body, source: str, as_of: str | None) -> int:
+    outcomes = enrich.parse_outcomes(body, enrich.linkedin_index(conn))
     result = enrich.apply_outcomes(
         conn,
-        enrich.parse_outcomes(body),
-        source="fullenrich_fetch",
-        checked_at=args.as_of,
-        record_not_found=status in ("", "FINISHED"),  # an unfinished job proves nothing
+        outcomes,
+        source=source,
+        checked_at=as_of,
+        record_not_found=enrich.is_finished(body),  # an unfinished job proves nothing
     )
-    print(f"status={status or 'unknown'} {result}")
+    n_records = len(enrich.records(body))
+    status = str(body.get("status") or "") if isinstance(body, dict) else ""
+    print(f"status={status or 'unknown'} records={n_records} matched={len(outcomes)} {result}")
     return 0
 
 
@@ -187,6 +201,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("enrichment_id")
     p.add_argument("--as-of", help="YYYY-MM-DD stored as the check date (default: today)")
     p.set_defaults(func=cmd_fetch)
+
+    p = sub.add_parser(
+        "import-results",
+        help="store a saved enrichment result (JSON from the app, the API or the MCP connector)",
+    )
+    p.add_argument("file")
+    p.add_argument("--source", default="fullenrich_import", help="stored as email_source")
+    p.add_argument("--as-of", help="YYYY-MM-DD stored as the check date (default: today)")
+    p.set_defaults(func=cmd_import_results)
 
     p = sub.add_parser("serve", help="run the webhook receiver")
     p.add_argument("--host", default="127.0.0.1")

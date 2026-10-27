@@ -264,3 +264,93 @@ def test_report_states_cost_and_hides_personal_data(conn):
     assert "Below the minimum company size | 1" in report
     assert "- Right" in report and "Tiny" not in report.split("Companies in this batch")[1]
     assert "linkedin" not in report.lower()
+
+
+# ---- MCP connector shape: results[], contact_info, no `custom`, mapped by LinkedIn URL
+
+MCP_BODY = {
+    "status": "FINISHED",
+    "results": [
+        {
+            "input": {"professional_network_url": "https://www.linkedin.com/in/p0"},
+            "contact_info": {
+                "most_probable_work_email": {"email": "a@acme.example", "status": "DELIVERABLE"},
+                "work_emails": [{"email": "a@acme.example", "status": "DELIVERABLE"}],
+                "most_probable_phone": None,
+            },
+        },
+        {
+            "input": {"professional_network_url": "https://linkedin.com/in/P1/"},
+            "contact_info": {
+                "work_emails": [{"email": "b@acme.example", "status": "HIGH_PROBABILITY"}]
+            },
+        },
+        {
+            "input": {"professional_network_url": "https://www.linkedin.com/in/p2"},
+            "contact_info": {"most_probable_phone": None},
+        },
+        {
+            "input": {"professional_network_url": "https://www.linkedin.com/in/stranger"},
+            "contact_info": {
+                "most_probable_work_email": {"email": "s@x.example", "status": "DELIVERABLE"}
+            },
+        },
+    ],
+}
+
+
+def test_normalize_linkedin_ignores_scheme_www_case_slash_and_query():
+    assert enrich.normalize_linkedin("https://www.LinkedIn.com/in/Jane-Doe/?utm=x") == (
+        "linkedin.com/in/jane-doe"
+    )
+    assert enrich.normalize_linkedin(None) == ""
+
+
+def test_mcp_results_map_back_by_linkedin_url(conn):
+    _people(conn, 3)
+    ids = [r["id"] for r in conn.execute("SELECT id FROM people ORDER BY id")]
+    outcomes = enrich.parse_outcomes(MCP_BODY, enrich.linkedin_index(conn))
+    assert outcomes == [
+        (ids[0], "a@acme.example", "deliverable"),
+        (ids[1], "b@acme.example", "high_probability"),
+        (ids[2], None, None),
+    ]  # the record for someone not in the database is skipped
+
+
+def test_mcp_results_without_an_index_map_to_nobody():
+    assert enrich.parse_outcomes(MCP_BODY) == []
+
+
+def test_invalid_most_probable_work_email_is_ignored():
+    record = {
+        "custom": {"person_id": "1"},
+        "contact_info": {
+            "most_probable_work_email": {"email": "bad@a.example", "status": "INVALID"}
+        },
+    }
+    assert enrich.parse_outcomes(record) == [(1, None, None)]
+
+
+def test_only_a_finished_job_proves_not_found():
+    assert enrich.is_finished(MCP_BODY)
+    assert enrich.is_finished(V1_BODY["datas"][0])  # a single webhook record has no status
+    assert not enrich.is_finished({"status": "IN_PROGRESS", "results": []})
+
+
+def test_import_results_command_stores_emails_and_not_found(conn, tmp_path, capsys):
+    from gtm_pipeline import cli
+
+    _people(conn, 3)
+    db = conn.execute("PRAGMA database_list").fetchone()["file"]
+    path = tmp_path / "result.json"
+    path.write_text(json.dumps(MCP_BODY))
+    assert cli.main(["--db", db, "import-results", str(path), "--as-of", AS_OF]) == 0
+    assert "records=4 matched=3" in capsys.readouterr().out
+    rows = conn.execute("SELECT email, email_source, email_checked_at FROM people ORDER BY id")
+    assert [tuple(r) for r in rows] == [
+        ("a@acme.example", "fullenrich_import", AS_OF),
+        ("b@acme.example", "fullenrich_import", AS_OF),
+        (None, None, None),
+    ]
+    attempts = [r["status"] for r in conn.execute("SELECT status FROM enrichment_attempts")]
+    assert sorted(attempts) == ["found", "found", "not_found"]

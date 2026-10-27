@@ -263,55 +263,107 @@ def fetch_results(
 # --------------------------------------------------------------------------- parsing
 
 
-def _records(body: Any) -> list[dict[str, Any]]:
-    """Accept the shapes seen in the docs: {datas: [...]}, {data: [...]}, or a single record."""
+def records(body: Any) -> list[dict[str, Any]]:
+    """Accept the shapes seen so far: {datas: [...]}, {data: [...]}, {results: [...]} (the
+    FullEnrich MCP connector), a bare list, or a single record."""
     if isinstance(body, list):
         return [r for r in body if isinstance(r, dict)]
     if not isinstance(body, dict):
         return []
-    for key in ("datas", "data"):
+    for key in ("datas", "data", "results"):
         value = body.get(key)
         if isinstance(value, list):
             return [r for r in value if isinstance(r, dict)]
         if isinstance(value, dict):
-            return _records(value)
-    return [body] if "custom" in body else []
+            return records(value)
+    return [body] if "custom" in body or "input" in body else []
+
+
+def _email_and_status(value: Any, status: Any = None) -> tuple[str | None, str]:
+    """`most_probable_*email` is a string (API docs) or {email, status} (MCP connector)."""
+    if isinstance(value, dict):
+        return value.get("email"), str(value.get("status") or "").upper()
+    return value, str(status or "").upper()
 
 
 def _best_email(contact: dict[str, Any]) -> tuple[str | None, str | None]:
-    email = contact.get("most_probable_email")
-    status = str(contact.get("most_probable_email_status") or "").upper()
-    if email and status != "INVALID":
-        return str(email), (status.lower() if status else "unverified")
-    for entry in contact.get("emails") or []:
+    for key in ("most_probable_email", "most_probable_work_email"):
+        email, status = _email_and_status(
+            contact.get(key), contact.get("most_probable_email_status")
+        )
+        if email and status != "INVALID":
+            return str(email), (status.lower() if status else "unverified")
+    for entry in (contact.get("emails") or []) + (contact.get("work_emails") or []):
         if isinstance(entry, dict) and entry.get("email"):
             if str(entry.get("status", "")).upper() in GOOD_EMAIL_STATUSES:
                 return str(entry["email"]), str(entry["status"]).lower()
     return None, None
 
 
-def parse_outcomes(body: Any) -> list[Outcome]:
-    """One outcome per record that carries a person_id; email is None when nothing was found."""
+def normalize_linkedin(url: str | None) -> str:
+    """'https://www.linkedin.com/in/Jane-Doe/?x=1' -> 'linkedin.com/in/jane-doe'."""
+    if not url:
+        return ""
+    url = url.strip().lower().split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    for prefix in ("https://", "http://", "www."):
+        url = url.removeprefix(prefix)
+    return url
+
+
+def linkedin_index(conn: sqlite3.Connection) -> dict[str, int]:
+    """Normalized LinkedIn URL -> person id, to map back results that carry no `custom` field."""
+    return {
+        normalize_linkedin(row["linkedin_url"]): row["id"]
+        for row in conn.execute("SELECT id, linkedin_url FROM people WHERE linkedin_url <> ''")
+    }
+
+
+def _person_id(record: dict[str, Any], by_linkedin: dict[str, int] | None) -> int | None:
+    custom = record.get("custom") or {}
+    try:
+        return int(custom["person_id"])
+    except (KeyError, TypeError, ValueError):
+        pass
+    if not by_linkedin:
+        return None
+    sent = record.get("input") or {}
+    url = sent.get("professional_network_url") or sent.get("linkedin_url")
+    return by_linkedin.get(normalize_linkedin(url))
+
+
+def parse_outcomes(body: Any, by_linkedin: dict[str, int] | None = None) -> list[Outcome]:
+    """One outcome per record that maps to a person; email is None when nothing was found.
+
+    Records are mapped by `custom.person_id` (set by `build_payloads`), or else by the LinkedIn
+    URL that was sent, when `by_linkedin` is given (see `linkedin_index`). Records that map to
+    nobody are skipped.
+    """
     outcomes: list[Outcome] = []
-    for record in _records(body):
-        custom = record.get("custom") or {}
-        contact = record.get("contact") or record.get("contact_info") or {}
-        try:
-            person_id = int(custom["person_id"])
-        except (KeyError, TypeError, ValueError):
+    for record in records(body):
+        person_id = _person_id(record, by_linkedin)
+        if person_id is None:
             continue
+        contact = record.get("contact") or record.get("contact_info") or {}
         email, status = _best_email(contact)
         outcomes.append((person_id, email, status))
     return outcomes
 
 
-def parse_results(body: Any) -> list[tuple[int, str, str]]:
+def parse_results(
+    body: Any, by_linkedin: dict[str, int] | None = None
+) -> list[tuple[int, str, str]]:
     """Return (person_id, email, email_status) for every record that found an email."""
     return [
         (person_id, email, status or "unverified")
-        for person_id, email, status in parse_outcomes(body)
+        for person_id, email, status in parse_outcomes(body, by_linkedin)
         if email
     ]
+
+
+def is_finished(body: Any) -> bool:
+    """Only a finished job proves "not found". A body with no status is a single final record."""
+    status = str(body.get("status") or "").upper() if isinstance(body, dict) else ""
+    return status in ("", "FINISHED")
 
 
 # --------------------------------------------------------------------------- storing
