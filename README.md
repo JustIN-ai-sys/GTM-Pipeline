@@ -138,6 +138,11 @@ Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke 
   public API docs; the tests use a fake network. The webhook parser accepts the response shapes
   shown in the docs (`datas`, `data`, a single record) but should be checked against a real
   payload before trusting it.
+- **First real pilot (2026-10-27), run through the FullEnrich MCP connector, not `--live`:**
+  10 contacts sent (work emails only), 8 emails found, all `DELIVERABLE`; 8 credits charged,
+  nothing for the 2 not found. The connector's result shape differs from what the parser
+  expects (`contact_info.most_probable_work_email` as an object, `work_emails` instead of
+  `emails`, no `custom` field), so I mapped results back by LinkedIn URL with a one-off script.
 - SQLite, not a warehouse. The SQL uses standard CTEs; moving to Postgres or BigQuery means
   replacing `julianday()` with date arithmetic and adding a loading step.
 - The score is a transparent heuristic, not a model. The weights are my judgment, not tuned on

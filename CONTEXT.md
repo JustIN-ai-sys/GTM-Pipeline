@@ -20,8 +20,10 @@ Private dataset details (aggregates only):
   201-500, one search per technology.
 - 35 signals, all `confirmed`, source `fullenrich_technographics`, observed 2026-10-26:
   HubSpot 20 companies, Salesforce 5, Pipedrive 10 (some companies match several).
-- No deals and no people yet. Companies are scored on fit + signals only, so the maximum is 50
-  and every tier is C. **Read the ranking by score, not by tier.**
+- No deals. Companies are scored on fit + signals (+ coverage once emails exist), every tier is
+  C. **Read the ranking by score, not by tier.**
+- People (2026-10-27): 13 found with free `search_people` at 9 of the top 10 companies
+  (founders, chiefs of staff, RevOps, one sales director). No usable match at the 10th.
 - `data/private/raw/` keeps the raw search responses so the CSVs can be rebuilt with
   `scripts/companies_from_fullenrich.py`.
 
@@ -29,18 +31,23 @@ Private dataset details (aggregates only):
 
 - 45 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
 - The FullEnrich request format follows the public docs. **No `--live` run has been verified
-  against a real account yet.** The first pilot (10 contacts) is the verification.
+  against a real account yet.**
+- Pilot 1 (2026-10-27, via the MCP `enrich_bulk` tool, work emails only): **8 emails found out
+  of 10** (all `DELIVERABLE`), 8 credits charged, 0 for the 2 not found. Results stored with
+  source `fullenrich_mcp`; the 2 not found are in the 90-day cooldown.
+- The MCP result shape is `results[].contact_info.most_probable_work_email {email, status}` and
+  `work_emails[]`, with no `custom` field: `parse_outcomes` does not read it yet.
 - The webhook payload shape is not documented. The parser accepts the shapes in the docs; check
   it against one real payload.
 
 ## Next steps
 
-1. Get people for the top companies (FullEnrich `search_people` is free, 10 per call, or a CSV
-   export from the app) and load them with `gtm load --people`.
-2. Dry run: `gtm enrich --limit 10 --report data/private/report.md`.
-3. Pilot of 10 with `--live --yes`; read the hit rate; then rerun on the rest (the cooldown
-   skips anyone already looked up).
-4. Add suppressions (customers, opt-outs) before any larger run.
+1. Teach `parse_outcomes` the MCP result shape (match by LinkedIn URL when `custom` is absent),
+   with a test.
+2. Hit rate is above 6/10: enrich the remaining 3 eligible people, then search people for the
+   next companies in the ranking.
+3. Add suppressions (customers, opt-outs) before any larger run.
+4. Verify a real `--live` run once an API key is available.
 5. Back-test the score once real deals exist.
 
 ## Open questions
