@@ -31,3 +31,6 @@ jobs:
           gtm --db ci.db score --as-of 2026-10-26 --top 5 --out out.csv
           gtm --db ci.db health --as-of 2026-10-26
           gtm --db ci.db enrich --limit 20 --min-employees 20 --report report.md
+          gtm --db ci.db export --format lemlist --out lemlist.csv --include-unverified
+          gtm --db ci.db export --format pipedrive --out pipedrive.csv --min-score 45 \
+            --include-unverified --as-of 2026-10-26

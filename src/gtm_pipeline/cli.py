@@ -1,4 +1,4 @@
-"""Command line: init, load, score, health, enrich, fetch, import-results, serve."""
+"""Command line: init, load, score, health, enrich, fetch, import-results, export, serve."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from gtm_pipeline import enrich, loader, scoring
+from gtm_pipeline import enrich, export, loader, scoring
 from gtm_pipeline.db import connect, init_db
 
 
@@ -132,6 +132,14 @@ def _store_results(conn, body, source: str, as_of: str | None) -> int:
     return 0
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    conn = connect(args.db)
+    result = export.ready_contacts(conn, args.as_of, args.min_score, args.include_unverified)
+    export.write_csv(result.rows, args.out, args.format)
+    print(export.render_summary(result, args.format, args.out))
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from gtm_pipeline.webhook import make_server
 
@@ -210,6 +218,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--source", default="fullenrich_import", help="stored as email_source")
     p.add_argument("--as-of", help="YYYY-MM-DD stored as the check date (default: today)")
     p.set_defaults(func=cmd_import_results)
+
+    p = sub.add_parser(
+        "export", help="write a CSV of ready contacts for lemlist or Pipedrive (sends nothing)"
+    )
+    p.add_argument("--format", choices=sorted(export.FORMATS), default="lemlist")
+    p.add_argument("--out", required=True, help="CSV path; it holds personal data, keep it private")
+    p.add_argument("--min-score", type=int, default=0, help="leave out accounts below this score")
+    p.add_argument(
+        "--include-unverified",
+        action="store_true",
+        help="also export emails typed into the CRM that were never verified",
+    )
+    p.add_argument("--as-of", help="YYYY-MM-DD for the score (default: today)")
+    p.set_defaults(func=cmd_export)
 
     p = sub.add_parser("serve", help="run the webhook receiver")
     p.add_argument("--host", default="127.0.0.1")

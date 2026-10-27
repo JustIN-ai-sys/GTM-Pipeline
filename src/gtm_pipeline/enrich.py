@@ -70,7 +70,7 @@ def _today() -> str:
     return date.today().isoformat()
 
 
-def _suppressed_sets(conn: sqlite3.Connection) -> tuple[set[str], set[str], set[str]]:
+def suppressed_sets(conn: sqlite3.Connection) -> tuple[set[str], set[str], set[str]]:
     emails: set[str] = set()
     domains: set[str] = set()
     orgs: set[str] = set()
@@ -85,7 +85,7 @@ def classify(
     """Return (row, reason) for every person. Reason 'ok' means worth enriching."""
     filters = filters or Filters()
     as_of = as_of or _today()
-    _, domains, orgs = _suppressed_sets(conn)
+    _, domains, orgs = suppressed_sets(conn)
     cutoff = (date.fromisoformat(as_of) - timedelta(days=filters.cooldown_days)).isoformat()
     rows = conn.execute(
         """
@@ -383,7 +383,7 @@ def apply_outcomes(
     - "Not found" is remembered (so a rerun does not pay again) but never replaces a "found".
     """
     checked_at = checked_at or _today()
-    sup_emails, sup_domains, _ = _suppressed_sets(conn)
+    sup_emails, sup_domains, _ = suppressed_sets(conn)
     stored = not_found = suppressed = 0
     for person_id, email, status in outcomes:
         if email and (
