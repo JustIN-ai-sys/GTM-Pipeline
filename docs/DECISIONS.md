@@ -12,3 +12,7 @@
 | Test on 10 contacts first | The hit rate decides whether the other contacts are worth the credits. |
 | Real data stays in `data/private/` | Contacts and emails are personal data; employer or client CRM data must never enter a public repository. |
 | Score weights are judgment, not a model | They are written down and editable; back-test them once deals exist. |
+| Export a CSV, do not push to a sequencer or CRM | Sending email cannot be undone; a person reads the list before importing it. |
+| Suppressions checked a third time at export | The do-not-contact list may have grown between enrichment and outreach. |
+| Verified emails only in exports by default | A bounce hurts the sending domain more than a missing contact costs. |
+| Map results by LinkedIn URL when `custom` is missing | The MCP connector and app exports return no `custom` field; LinkedIn URL is the key that was sent. |

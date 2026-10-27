@@ -13,19 +13,22 @@ to work, then finds missing work emails through FullEnrich. Three layers, kept s
 - **Orchestration**: what to do next. `sql/score_accounts.sql` (the score), `enrich.classify`
   (who is worth paying for), `scoring.py`.
 - **Activation**: actions with side effects. `enrich.start_bulk` (spends credits), `webhook.py`
-  (receives results). Nothing here runs unless the user passes `--live --yes`.
+  (receives results). Nothing here runs unless the user passes `--live --yes`. `export.py`
+  writes a CSV for lemlist or Pipedrive; it never sends anything or calls a CRM API.
 
 ## Commands
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                 # 45 tests, standard library only at runtime
+pytest -q                 # 61 tests, standard library only at runtime
 ruff check . && ruff format .
 gtm --db data/private/gtm.db init
 gtm --db data/private/gtm.db load --orgs data/private/organizations.csv \
     --signals data/private/signals.csv
 gtm --db data/private/gtm.db score --top 20 --out data/private/ranking.csv
 gtm --db data/private/gtm.db enrich --limit 10 --report data/private/report.md   # dry run
+gtm --db data/private/gtm.db import-results data/private/raw/result.json  # saved JSON result
+gtm --db data/private/gtm.db export --format lemlist --out data/private/out/lemlist.csv
 ```
 
 ## Rules that must not be broken
@@ -61,7 +64,7 @@ verified against a real account unless `CONTEXT.md` says so).
 ```
 sql/schema.sql            tables, ICP weights, signal rules
 sql/score_accounts.sql    the 0-100 score
-src/gtm_pipeline/         loader, scoring, enrich, webhook, cli
+src/gtm_pipeline/         loader, scoring, enrich, export, webhook, cli
 tests/                    pytest, fake network
 data/sample/              invented demo data (committed)
 data/private/             real data from FullEnrich (git-ignored)

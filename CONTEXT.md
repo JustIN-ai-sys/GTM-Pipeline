@@ -29,26 +29,27 @@ Private dataset details (aggregates only):
 
 ## What has been verified
 
-- 45 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
+- 61 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
 - The FullEnrich request format follows the public docs. **No `--live` run has been verified
   against a real account yet.**
 - Pilot 1 (2026-10-27, via the MCP `enrich_bulk` tool, work emails only): **8 emails found out
   of 10** (all `DELIVERABLE`), 8 credits charged, 0 for the 2 not found. Results stored with
   source `fullenrich_mcp`; the 2 not found are in the 90-day cooldown.
 - The MCP result shape is `results[].contact_info.most_probable_work_email {email, status}` and
-  `work_emails[]`, with no `custom` field: `parse_outcomes` does not read it yet.
+  `work_emails[]`, with no `custom` field. `parse_outcomes` reads it and maps by LinkedIn URL;
+  `gtm import-results` on the saved pilot result reproduces 8 found / 2 not found.
+- `gtm export` on the private data: 8 contacts at 6 accounts ready for a sequencer (nothing sent).
 - The webhook payload shape is not documented. The parser accepts the shapes in the docs; check
   it against one real payload.
 
 ## Next steps
 
-1. Teach `parse_outcomes` the MCP result shape (match by LinkedIn URL when `custom` is absent),
-   with a test.
-2. Hit rate is above 6/10: enrich the remaining 3 eligible people, then search people for the
-   next companies in the ranking.
-3. Add suppressions (customers, opt-outs) before any larger run.
+1. Hit rate is above 6/10: enrich the remaining 3 eligible people (max 3 credits), then search
+   people for the next companies in the ranking.
+2. Add suppressions (customers, opt-outs) before any larger run or any export.
+3. Import the export into a sequencer, track replies, and feed them back as signals or deals.
 4. Verify a real `--live` run once an API key is available.
-5. Back-test the score once real deals exist.
+5. Back-test the score once real deals or replies exist.
 
 ## Open questions
 

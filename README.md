@@ -8,10 +8,29 @@ not scale, so each step is now a small, tested command.
 
 ```
 CRM export (CSV)  ->  SQLite  ->  SQL account score  ->  ranked list + next action
-                         ^
-                         |  emails found
-              FullEnrich bulk API  <-  contacts with no email   (webhook or fetch)
+                         ^                                        |
+                         |  emails found                          v
+              FullEnrich bulk API  <-  contacts with no email     gtm export
+              (webhook, fetch or saved JSON)                      |
+                                                                  v
+                                           lemlist / Pipedrive CSV (verified, not suppressed)
 ```
+
+## Results so far
+
+On real data (31 San Francisco software companies found with FullEnrich company search, kept out
+of this repository):
+
+- **Accounts**: ranked on fit and confirmed CRM signals (HubSpot 20, Pipedrive 10, Salesforce 5).
+- **People**: 13 decision makers found at 9 of the top 10 accounts with the free people search
+  (founders, chiefs of staff, RevOps, sales).
+- **Pilot enrichment, 10 contacts: 8 work emails found, all `DELIVERABLE`, 8 credits spent**
+  (nothing charged for the 2 not found, which are now in a 90-day cooldown).
+- **Hand-off**: 8 contacts at 6 accounts exported for a sequencer, best accounts first.
+
+What I learned from the pilot: the result format of the FullEnrich connector differs from the
+one in the API docs (no `custom` field, `work_emails` instead of `emails`). The parser now reads
+both and maps results back by LinkedIn URL; a test covers it.
 
 ## What it does
 
@@ -23,6 +42,8 @@ CRM export (CSV)  ->  SQLite  ->  SQL account score  ->  ranked list + next acti
 | `gtm enrich` | Filters who is worth paying for, prints a report with the maximum cost, then (only with `--live --yes`) sends batches of 100 to FullEnrich. **Dry run by default.** |
 | `gtm serve` | Small webhook receiver that stores the emails FullEnrich sends back. |
 | `gtm fetch <id>` | Pulls the results of one enrichment by id, as a fallback to the webhook. |
+| `gtm import-results <file>` | Stores a saved result (JSON from the app, the API or the MCP connector). |
+| `gtm export` | Writes the contacts ready to work as a lemlist or Pipedrive CSV. **Sends nothing.** |
 
 ## Quick start
 
@@ -39,10 +60,42 @@ gtm load --orgs data/sample/organizations.csv \
 gtm score --as-of 2026-10-26 --top 8 --out out.csv
 gtm health --as-of 2026-10-26
 gtm enrich --limit 30 --min-employees 20    # dry run: a report, spends nothing
+gtm export --format lemlist --out out/lemlist.csv --min-score 45 --include-unverified
 pytest
 ```
 
-Run it on the sample data to see the ranking (invented companies).
+What it prints on the sample data (invented companies):
+
+```text
+$ gtm score --as-of 2026-10-26 --top 6
+name          score  tier  open_deals  open_value  contacts_with_email  next_action
+Blue Labs     77     A     2           80000.0     4                    Push to next stage
+Iron Health   73     A     1           65000.0     2                    Push to next stage
+Iron Grid     67     B     1           15000.0     3                    Nurture
+Quick Retail  66     B     2           74000.0     2                    Push to next stage
+Open Ledger   63     B     2           95000.0     0                    Enrich contact emails
+Maple Pay     63     B     2           65800.0     1                    Push to next stage
+
+$ gtm enrich --limit 10 --min-employees 20 --as-of 2026-10-26
+| Outcome | People |
+|---|---|
+| Eligible | 19 |
+| Already has an email | 34 |
+| On the suppression list (domain or organization) | 2 |
+| Below the minimum company size | 10 |
+
+**To enrich now: 10** (19 eligible, limit 10), in 1 batch(es).
+Maximum cost: 10 credits (one per work email found; nothing is charged when no email is found).
+Dry run: nothing was sent and no credit was spent.
+
+$ gtm export --out out/lemlist.csv --min-score 45 --include-unverified --as-of 2026-10-26
+Exported 23 contacts for lemlist to out/lemlist.csv
+Accounts: 11, best score 77
+Skipped - No email: 31
+Skipped - On the suppression list (email, domain or organization): 2
+Skipped - Account below --min-score: 9
+Nothing was sent. Read the file, then import it yourself.
+```
 
 ## The score
 
@@ -103,7 +156,9 @@ request is built:
 
 Then it calls `POST https://app.fullenrich.com/api/v2/contact/enrich/bulk` in batches of 100.
 Each contact carries its own `person_id` in the `custom` field, so results map back to the right
-row.
+row. Results that come back without it (the FullEnrich MCP connector, or a JSON exported from the
+app) are mapped by normalized LinkedIn URL; `gtm import-results <file>` stores such a file with
+the same rules as `fetch`.
 
 - **Start with `--limit 10`.** Read the hit rate, then rerun on the rest. Reruns are cheap: found
   contacts have an email, and "not found" is remembered in `enrichment_attempts`.
@@ -113,6 +168,23 @@ row.
 - **Never overwrites** an email that is already stored, and never stores an email on the
   suppression list.
 - **Errors do not leak the key.** HTTP errors raise a message with the status code only.
+
+## Hand-off to outreach
+
+`gtm export --format lemlist|pipedrive --out FILE` writes the contacts that are ready to work,
+best accounts first. It never calls a sending tool or a CRM API: a person reads the file and
+imports it.
+
+- **Verified emails only** by default (`deliverable`, `high_probability`). Emails typed into the
+  CRM and never checked need `--include-unverified`.
+- **Suppressions are checked again** at export time (email, domain, organization): the list may
+  have grown since the enrichment.
+- `--min-score N` leaves out weak accounts.
+- **Each row says why the contact was chosen**: account score, confirmed CRM signals and next
+  action. In lemlist they become variables (`{{accountScore}}`, `{{crmUsed}}`,
+  `{{nextAction}}`); in Pipedrive they go in the note, with the email's source and check date.
+- The Pipedrive format uses the same headers the loader reads, so an export loads back with
+  `gtm load --people` without duplicates (a test covers it).
 
 ## Using it with Claude Code
 
@@ -124,11 +196,12 @@ the decisions. `/enrich-pilot` runs the gated 10-contact pilot. Real data goes i
 
 ## Tests and CI
 
-`pytest` runs 45 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 61 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
-network, and the webhook server on a local port. The GitHub Actions workflow
+network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
+round trip, and the webhook server on a local port. The GitHub Actions workflow
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) lints with ruff, runs the tests on
-Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke test.
+Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke test, export included.
 
 ## Limits (read before relying on it)
 
@@ -140,9 +213,10 @@ Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke 
   payload before trusting it.
 - **First real pilot (2026-10-27), run through the FullEnrich MCP connector, not `--live`:**
   10 contacts sent (work emails only), 8 emails found, all `DELIVERABLE`; 8 credits charged,
-  nothing for the 2 not found. The connector's result shape differs from what the parser
-  expects (`contact_info.most_probable_work_email` as an object, `work_emails` instead of
-  `emails`, no `custom` field), so I mapped results back by LinkedIn URL with a one-off script.
+  nothing for the 2 not found. Its result format is now covered by the parser and a test, and
+  re-importing the real result with `gtm import-results` gives the same 8/10.
+- **No outreach has been sent from this project.** `gtm export` writes a file; the score has not
+  been checked against replies or won deals yet (there are no deals on the real list).
 - SQLite, not a warehouse. The SQL uses standard CTEs; moving to Postgres or BigQuery means
   replacing `julianday()` with date arithmetic and adding a loading step.
 - The score is a transparent heuristic, not a model. The weights are my judgment, not tuned on
