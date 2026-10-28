@@ -14,13 +14,14 @@ to work, then finds missing work emails through FullEnrich. Three layers, kept s
   (who is worth paying for), `scoring.py`.
 - **Activation**: actions with side effects. `enrich.start_bulk` (spends credits), `webhook.py`
   (receives results). Nothing here runs unless the user passes `--live --yes`. `export.py`
-  writes a CSV for lemlist or Pipedrive; it never sends anything or calls a CRM API.
+  writes a CSV for lemlist or Pipedrive; it never sends anything. `hubspot.py` writes the same
+  contacts to HubSpot, only with `--live --yes` and `HUBSPOT_TOKEN`.
 
 ## Commands
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                 # 61 tests, standard library only at runtime
+pytest -q                 # 67 tests, standard library only at runtime
 ruff check . && ruff format .
 gtm --db data/private/gtm.db init
 gtm --db data/private/gtm.db load --orgs data/private/organizations.csv \
@@ -29,11 +30,12 @@ gtm --db data/private/gtm.db score --top 20 --out data/private/ranking.csv
 gtm --db data/private/gtm.db enrich --limit 10 --report data/private/report.md   # dry run
 gtm --db data/private/gtm.db import-results data/private/raw/result.json  # saved JSON result
 gtm --db data/private/gtm.db export --format lemlist --out data/private/out/lemlist.csv
+gtm --db data/private/gtm.db push hubspot --min-score 40          # dry run; --live --yes writes
 ```
 
 ## Rules that must not be broken
 
-1. **Never spend credits on your own.** `gtm enrich` is a dry run unless `--live --yes` is given
+1. **Never spend credits or write to a CRM on your own.** `gtm enrich` is a dry run unless `--live --yes` is given
    by the user in this conversation. Always show the report first and state the maximum cost.
    Check the balance with the FullEnrich `get_credits` tool before any live run.
 2. **Never commit personal data or secrets.** `data/private/`, `*.db`, `.env`, `out/` are
@@ -64,7 +66,7 @@ verified against a real account unless `CONTEXT.md` says so).
 ```
 sql/schema.sql            tables, ICP weights, signal rules
 sql/score_accounts.sql    the 0-100 score
-src/gtm_pipeline/         loader, scoring, enrich, export, webhook, cli
+src/gtm_pipeline/         loader, scoring, enrich, export, hubspot, webhook, cli
 tests/                    pytest, fake network
 data/sample/              invented demo data (committed)
 data/private/             real data from FullEnrich (git-ignored)

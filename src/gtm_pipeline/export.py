@@ -132,6 +132,7 @@ def _row(person: sqlite3.Row, account: sqlite3.Row) -> dict[str, Any]:
         why += f", uses {crm_used}"
     source = person["email_source"] or "crm"
     checked = person["email_checked_at"] or "unknown date"
+    provenance = f"{person['email_status']} from {source}, checked {checked}"
     return {
         "first_name": person["first_name"],
         "last_name": person["last_name"],
@@ -144,9 +145,8 @@ def _row(person: sqlite3.Row, account: sqlite3.Row) -> dict[str, Any]:
         "tier": account["tier"],
         "crm_used": crm_used,
         "next_action": account["next_action"],
-        "note": (
-            f"gtm-pipeline: {why}. Email {person['email_status']} from {source}, checked {checked}."
-        ),
+        "provenance": provenance,
+        "note": f"gtm-pipeline: {why}. Email {provenance}.",
     }
 
 

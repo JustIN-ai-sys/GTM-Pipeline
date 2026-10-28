@@ -34,3 +34,4 @@ jobs:
           gtm --db ci.db export --format lemlist --out lemlist.csv --include-unverified
           gtm --db ci.db export --format pipedrive --out pipedrive.csv --min-score 45 \
             --include-unverified --as-of 2026-10-26
+          gtm --db ci.db push hubspot --min-score 45 --include-unverified --as-of 2026-10-26

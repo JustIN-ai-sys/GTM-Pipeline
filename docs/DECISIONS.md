@@ -15,4 +15,5 @@
 | Export a CSV, do not push to a sequencer or CRM | Sending email cannot be undone; a person reads the list before importing it. |
 | Suppressions checked a third time at export | The do-not-contact list may have grown between enrichment and outreach. |
 | Verified emails only in exports by default | A bounce hurts the sending domain more than a missing contact costs. |
+| HubSpot: update only `gtm_*` properties on existing records | The CRM belongs to the reps; a sync must not overwrite a name, title or owner they edited. |
 | Map results by LinkedIn URL when `custom` is missing | The MCP connector and app exports return no `custom` field; LinkedIn URL is the key that was sent. |

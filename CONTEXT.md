@@ -29,7 +29,7 @@ Private dataset details (aggregates only):
 
 ## What has been verified
 
-- 61 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
+- 67 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
 - The FullEnrich request format follows the public docs. **No `--live` run has been verified
   against a real account yet.**
 - Pilot 1 (2026-10-27, via the MCP `enrich_bulk` tool, work emails only): **8 emails found out
@@ -39,6 +39,9 @@ Private dataset details (aggregates only):
   `work_emails[]`, with no `custom` field. `parse_outcomes` reads it and maps by LinkedIn URL;
   `gtm import-results` on the saved pilot result reproduces 8 found / 2 not found.
 - `gtm export` on the private data: 8 contacts at 6 accounts ready for a sequencer (nothing sent).
+- `gtm push hubspot` is tested against an in-memory fake API only. Dry run on the private data:
+  6 companies, 8 contacts. Not yet run on a real HubSpot portal (needs `HUBSPOT_TOKEN`, and
+  `api.hubapi.com` is blocked in the cloud session: run it locally or allow the host).
 - The webhook payload shape is not documented. The parser accepts the shapes in the docs; check
   it against one real payload.
 

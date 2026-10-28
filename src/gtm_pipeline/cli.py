@@ -1,4 +1,5 @@
-"""Command line: init, load, score, health, enrich, fetch, import-results, export, serve."""
+"""Command line: init, load, score, health, enrich, fetch, import-results, export, push,
+serve."""
 
 from __future__ import annotations
 
@@ -8,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 
-from gtm_pipeline import enrich, export, loader, scoring
+from gtm_pipeline import enrich, export, hubspot, loader, scoring
 from gtm_pipeline.db import connect, init_db
 
 
@@ -140,6 +141,26 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_push(args: argparse.Namespace) -> int:
+    conn = connect(args.db)
+    result = export.ready_contacts(conn, args.as_of, args.min_score, args.include_unverified)
+    push_plan = hubspot.plan(result.rows)
+    print(hubspot.render_plan(push_plan))
+    if not args.live:
+        print("Dry run: nothing was sent to HubSpot.")
+        return 0
+    token = os.environ.get("HUBSPOT_TOKEN")
+    if not token:
+        print("HUBSPOT_TOKEN is not set.", file=sys.stderr)
+        return 2
+    if not args.yes:
+        print("Refusing to write to the CRM without --yes.", file=sys.stderr)
+        return 2
+    client = hubspot.Client(token)
+    print(hubspot.push(push_plan, client), f"api_calls={client.calls}")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from gtm_pipeline.webhook import make_server
 
@@ -232,6 +253,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--as-of", help="YYYY-MM-DD for the score (default: today)")
     p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser(
+        "push", help="write ready contacts and account scores to HubSpot (dry run by default)"
+    )
+    p.add_argument("crm", choices=["hubspot"])
+    p.add_argument("--min-score", type=int, default=0, help="leave out accounts below this score")
+    p.add_argument("--include-unverified", action="store_true")
+    p.add_argument("--as-of", help="YYYY-MM-DD for the score (default: today)")
+    p.add_argument("--live", action="store_true", help="really call the HubSpot API")
+    p.add_argument("--yes", action="store_true", help="confirm that the CRM will be written to")
+    p.set_defaults(func=cmd_push)
 
     p = sub.add_parser("serve", help="run the webhook receiver")
     p.add_argument("--host", default="127.0.0.1")

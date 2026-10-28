@@ -44,6 +44,7 @@ both and maps results back by LinkedIn URL; a test covers it.
 | `gtm fetch <id>` | Pulls the results of one enrichment by id, as a fallback to the webhook. |
 | `gtm import-results <file>` | Stores a saved result (JSON from the app, the API or the MCP connector). |
 | `gtm export` | Writes the contacts ready to work as a lemlist or Pipedrive CSV. **Sends nothing.** |
+| `gtm push hubspot` | Writes the same contacts, their companies and account scores to HubSpot. **Dry run by default.** |
 
 ## Quick start
 
@@ -186,6 +187,31 @@ imports it.
 - The Pipedrive format uses the same headers the loader reads, so an export loads back with
   `gtm load --people` without duplicates (a test covers it).
 
+## HubSpot
+
+`gtm push hubspot` sends the same contacts as `gtm export` to HubSpot through the CRM API, with
+their companies and the account score.
+
+- **Dry run by default**: it prints how many companies and contacts it would write. It calls the
+  API only with `--live --yes` and `HUBSPOT_TOKEN` set.
+- **No duplicates**: companies are matched by domain (else exact name), contacts by email. A
+  rerun updates instead of creating.
+- **The CRM keeps its own data**: on an existing record only the `gtm_*` properties change
+  (`gtm_score`, `gtm_tier`, `gtm_next_action`, `gtm_signals` on companies; `gtm_reason`,
+  `gtm_email_source` on contacts), never a name, title or owner a rep may have edited. The
+  properties are created on the first live run.
+- Each contact is associated with its company.
+
+Setup: in HubSpot, Settings > Integrations > Private Apps > Create a private app, with the scopes
+`crm.objects.companies.read`, `crm.objects.companies.write`, `crm.objects.contacts.read`,
+`crm.objects.contacts.write`, `crm.schemas.companies.write`, `crm.schemas.contacts.write`. Copy
+the token into `HUBSPOT_TOKEN` (never into a file that is committed), then:
+
+```bash
+gtm push hubspot --min-score 40                # dry run: counts only
+gtm push hubspot --min-score 40 --live --yes   # writes to HubSpot
+```
+
 ## Using it with Claude Code
 
 The repository is set up so Claude Code starts with the right context: `CLAUDE.md` imports
@@ -196,10 +222,10 @@ the decisions. `/enrich-pilot` runs the gated 10-contact pilot. Real data goes i
 
 ## Tests and CI
 
-`pytest` runs 61 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 67 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
 network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
-round trip, and the webhook server on a local port. The GitHub Actions workflow
+round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), and the webhook server on a local port. The GitHub Actions workflow
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) lints with ruff, runs the tests on
 Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke test, export included.
 
@@ -215,6 +241,7 @@ Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke 
   10 contacts sent (work emails only), 8 emails found, all `DELIVERABLE`; 8 credits charged,
   nothing for the 2 not found. Its result format is now covered by the parser and a test, and
   re-importing the real result with `gtm import-results` gives the same 8/10.
+- **The HubSpot push is tested against a fake API only** until I run it on a real portal.
 - **No outreach has been sent from this project.** `gtm export` writes a file; the score has not
   been checked against replies or won deals yet (there are no deals on the real list).
 - SQLite, not a warehouse. The SQL uses standard CTEs; moving to Postgres or BigQuery means
