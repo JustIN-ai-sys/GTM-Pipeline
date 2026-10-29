@@ -61,7 +61,7 @@ below runs on invented sample data and spends nothing.
 git clone https://github.com/JustIN-ai-sys/GTM-Pipeline.git && cd GTM-Pipeline
 pip install -e ".[dev]"
 bash scripts/demo.sh      # load -> score -> enrichment dry run -> export -> HubSpot dry run
-pytest -q                 # 83 tests
+pytest -q                 # 84 tests
 ```
 
 `scripts/demo.sh` writes into `out/` (git-ignored). Each command is printed before it runs, so
@@ -265,7 +265,7 @@ or the FullEnrich connector). Real data goes in
 
 ## Tests and CI
 
-`pytest` runs 83 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 84 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
 network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
 round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), the
@@ -294,8 +294,10 @@ command succeeds, not what it prints.
   not proof that it generalises. Its first review flagged one overclaim in this very README
   ("before it can be merged"), a CI bug that hid failing eval reports, and one false positive
   (it thought `gtm load` did not create the schema). The second flagged that a pull request
-  could weaken its own reviewer and that a leaked key would still be sent to the model; both
-  are fixed. The scores are posted on each pull request that changes the reviewer.
+  could weaken its own reviewer and that a leaked key would still be sent to the model. The leak
+  is fixed. The reviewer's code, rubric and `AGENTS.md` now come from `main`, but the workflow
+  file itself still comes from the pull request, so a pull request can still switch the gate off
+  until `.github/` is protected (CODEOWNERS plus a required review, or a ruleset). The scores are posted on each pull request that changes the reviewer.
 - **No outreach has been sent from this project.** `gtm export` writes a file; the score has not
   been checked against replies or won deals yet (there are no deals on the real list).
 - SQLite, not a warehouse. Moving to Postgres or BigQuery means replacing the SQLite-specific
@@ -321,7 +323,7 @@ docs/       ICP and decisions
 sql/        schema, score, pipeline health
 src/        loader, scoring, enrich, export, hubspot, webhook, cli
 tools/      gtm_review: the pull request review agent, its rubric and evals
-tests/      83 tests
+tests/      84 tests
 scripts/    demo.sh, sample data generator, FullEnrich company search -> CSV
 data/sample fictional exports in Pipedrive's native header format
 ```

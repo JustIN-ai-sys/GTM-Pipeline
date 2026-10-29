@@ -1,6 +1,8 @@
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from gtm_review import precheck, review, run_evals
 
 CLEAN = run_evals.load_cases()[0]["diff"]
@@ -135,6 +137,19 @@ def test_refusal_truncation_and_bad_json_never_pass():
         FakeClient(text="not json"),
     ):
         assert review.review(CLEAN, client)["verdict"] == "needs_human"
+
+
+def test_an_api_error_is_needs_human_not_block():
+    anthropic = pytest.importorskip("anthropic")
+    client = FakeClient(_answer())
+
+    def boom(**kwargs):
+        raise anthropic.APIConnectionError(request=None)
+
+    client.beta.messages.create = boom
+    result = review.review(CLEAN, client)
+    assert result["verdict"] == "needs_human"
+    assert "APIConnectionError" in result["summary"]
 
 
 def test_oversized_diff_goes_to_a_human_without_calling_the_model():

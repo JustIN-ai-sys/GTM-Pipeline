@@ -5,7 +5,7 @@ set -euo pipefail
 marker="$1"
 file="$2"
 id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-  --jq "[.[] | select(.body | startswith(\"$marker\"))][0].id // empty")
+  --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
 if [ -n "$id" ]; then
   gh api -X PATCH "repos/$REPO/issues/comments/$id" -F "body=@$file" > /dev/null
 else

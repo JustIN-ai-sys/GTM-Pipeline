@@ -65,16 +65,22 @@ def system_prompt() -> str:
 
 
 def model_review(diff: str, client: Any) -> dict[str, Any]:
-    """Ask Claude for a verdict. Refusals and truncation become `needs_human`, never a pass."""
-    response = client.beta.messages.create(
-        model=MODEL,
-        max_tokens=16000,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-        output_config={"effort": "high", "format": {"type": "json_schema", "schema": SCHEMA}},
-        system=[{"type": "text", "text": system_prompt(), "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": f"Review this pull request diff.\n\n{diff}"}],
-    )
+    """Ask Claude for a verdict. Refusals, truncation and API errors become `needs_human`."""
+    try:
+        response = client.beta.messages.create(
+            model=MODEL,
+            max_tokens=16000,
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+            output_config={"effort": "high", "format": {"type": "json_schema", "schema": SCHEMA}},
+            system=[
+                {"type": "text", "text": system_prompt(), "cache_control": {"type": "ephemeral"}}
+            ],
+            messages=[{"role": "user", "content": f"Review this pull request diff.\n\n{diff}"}],
+        )
+    except _api_errors() as exc:
+        # The class name only: an API error is not a verdict on the code, and never a pass.
+        return _needs_human(f"The model review failed ({type(exc).__name__}).")
     if response.stop_reason in ("refusal", "max_tokens"):
         return _needs_human(f"The model review stopped early ({response.stop_reason}).")
     text = next((b.text for b in response.content if b.type == "text"), "")
@@ -82,6 +88,14 @@ def model_review(diff: str, client: Any) -> dict[str, Any]:
         return json.loads(text)
     except json.JSONDecodeError:
         return _needs_human("The model review did not return valid JSON.")
+
+
+def _api_errors() -> tuple[type[Exception], ...]:
+    try:
+        import anthropic
+    except ImportError:
+        return ()
+    return (anthropic.APIError,)
 
 
 def _needs_human(reason: str) -> dict[str, Any]:
