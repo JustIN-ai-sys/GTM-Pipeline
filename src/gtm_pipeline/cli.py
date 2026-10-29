@@ -1,5 +1,5 @@
 """Command line: init, load, score, health, enrich, fetch, import-results, export, push,
-serve."""
+warehouse, serve."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 
-from gtm_pipeline import enrich, export, hubspot, loader, scoring
+from gtm_pipeline import enrich, export, hubspot, loader, scoring, warehouse
 from gtm_pipeline.db import connect, init_db
 
 
@@ -161,6 +161,34 @@ def cmd_push(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_warehouse(args: argparse.Namespace) -> int:
+    conn = connect(args.db)
+    url = args.url or os.environ.get("DATABASE_URL")
+    target = warehouse.describe_target(url) if url else "no DATABASE_URL set"
+    print(f"Warehouse push to {target}:")
+    for table, count in warehouse.counts(conn).items():
+        print(f"  {table:<20} {count} rows")
+    if not args.yes:
+        print("Dry run: nothing was written. Add --yes to replace the warehouse tables.")
+        return 0
+    if not url:
+        print("DATABASE_URL is not set.", file=sys.stderr)
+        return 2
+    try:
+        pg = warehouse.connect(url)
+        try:
+            written = warehouse.push(conn, pg)
+        finally:
+            pg.close()
+    except warehouse.WarehouseError as exc:
+        print(f"Warehouse push failed: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"Done: {sum(written.values())} rows in {len(written)} tables, view account_scores ready."
+    )
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     from gtm_pipeline.webhook import make_server
 
@@ -264,6 +292,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--live", action="store_true", help="really call the HubSpot API")
     p.add_argument("--yes", action="store_true", help="confirm that the CRM will be written to")
     p.set_defaults(func=cmd_push)
+
+    p = sub.add_parser(
+        "warehouse", help="copy the database and the score view to Postgres or Supabase"
+    )
+    p.add_argument("action", choices=["push"])
+    p.add_argument("--url", help="Postgres URL (default: the DATABASE_URL variable)")
+    p.add_argument("--yes", action="store_true", help="replace the warehouse tables")
+    p.set_defaults(func=cmd_warehouse)
 
     p = sub.add_parser("serve", help="run the webhook receiver")
     p.add_argument("--host", default="127.0.0.1")

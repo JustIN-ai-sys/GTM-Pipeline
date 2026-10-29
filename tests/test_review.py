@@ -73,6 +73,16 @@ def test_precheck_allows_invented_domains_and_placeholders():
     assert precheck.run(diff) == []
 
 
+def test_precheck_flags_a_password_in_a_url_but_not_a_placeholder():
+    real = "postgresql://postgres:" + "hunter22" + "@db.x.supabase.co:5432/postgres"
+    placeholder = "postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres"
+    diff = f"--- a/f\n+++ b/x.py\n@@ -0,0 +1,2 @@\n+URL = '{real}'\n+URL = '{placeholder}'\n"
+    found = precheck.run(diff)
+    assert [(f.line, f.problem) for f in found] == [
+        (1, "Adds what looks like a secret or API key.")
+    ]
+
+
 def test_precheck_only_allows_the_exact_trailer_address():
     trailer = "noreply" + "@anthropic.com"
     contact = "jane" + "@anthropic.com"
