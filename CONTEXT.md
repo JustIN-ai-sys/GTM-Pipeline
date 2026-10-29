@@ -29,7 +29,7 @@ Private dataset details (aggregates only):
 
 ## What has been verified
 
-- 67 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
+- 81 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
 - The FullEnrich request format follows the public docs. **No `--live` run has been verified
   against a real account yet.**
 - Pilot 1 (2026-10-27, via the MCP `enrich_bulk` tool, work emails only): **8 emails found out
@@ -42,11 +42,17 @@ Private dataset details (aggregates only):
 - `gtm push hubspot` is tested against an in-memory fake API only. Dry run on the private data:
   6 companies, 8 contacts. Not yet run on a real HubSpot portal (needs `HUBSPOT_TOKEN`, and
   `api.hubapi.com` is blocked in the cloud session: run it locally or allow the host).
+- Review agent (`tools/gtm_review/`, `.github/workflows/review.yml`): prechecks and verdict logic
+  are unit-tested with a fake model client. **The model review and the 15-case evals have not run
+  against the API yet**: they need the `ANTHROPIC_API_KEY` repository secret. Prechecks alone
+  flag only the committed-contacts case and none of the clean cases.
 - The webhook payload shape is not documented. The parser accepts the shapes in the docs; check
   it against one real payload.
 
 ## Next steps
 
+0. Add the `ANTHROPIC_API_KEY` secret, run the reviewer evals, record the scores here and in the
+   README, and open every change as a pull request so the agent reviews it.
 1. Hit rate is above 6/10: enrich the remaining 3 eligible people (max 3 credits), then search
    people for the next companies in the ranking.
 2. Add suppressions (customers, opt-outs) before any larger run or any export.

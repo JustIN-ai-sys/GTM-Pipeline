@@ -16,4 +16,7 @@
 | Suppressions checked a third time at export | The do-not-contact list may have grown between enrichment and outreach. |
 | Verified emails only in exports by default | A bounce hurts the sending domain more than a missing contact costs. |
 | HubSpot: update only `gtm_*` properties on existing records | The CRM belongs to the reps; a sync must not overwrite a name, title or owner they edited. |
+| Review agent = regex prechecks, then the model | Secrets and real emails must never pass, whatever the model says; judgment calls go to the model. |
+| A refusal, a cut-off answer or an oversized diff is `needs_human`, never a pass | A review that did not happen must not look like an approval. |
+| Evals gate on zero missed blocks and zero false blocks | A missed block lets harm through; a false block teaches the team to ignore the agent. |
 | Map results by LinkedIn URL when `custom` is missing | The MCP connector and app exports return no `custom` field; LinkedIn URL is the key that was sent. |

@@ -21,7 +21,8 @@ to work, then finds missing work emails through FullEnrich. Three layers, kept s
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                 # 67 tests, standard library only at runtime
+pytest -q                 # 81 tests, standard library only at runtime
+bash scripts/demo.sh      # whole pipeline on the sample data, spends nothing
 ruff check . && ruff format .
 gtm --db data/private/gtm.db init
 gtm --db data/private/gtm.db load --orgs data/private/organizations.csv \
@@ -31,7 +32,14 @@ gtm --db data/private/gtm.db enrich --limit 10 --report data/private/report.md  
 gtm --db data/private/gtm.db import-results data/private/raw/result.json  # saved JSON result
 gtm --db data/private/gtm.db export --format lemlist --out data/private/out/lemlist.csv
 gtm --db data/private/gtm.db push hubspot --min-score 40          # dry run; --live --yes writes
+
+# review agent (needs pip install -e ".[review]" and ANTHROPIC_API_KEY; without it, prechecks only)
+PYTHONPATH=tools python -m gtm_review.review --base origin/main   # review your branch
+PYTHONPATH=tools python -m gtm_review.run_evals                    # measure the reviewer
 ```
+
+Before you open a pull request, run the review agent on your branch and fix what it blocks. Work
+goes through pull requests, not straight to `main`: that is where the agent reviews it.
 
 ## Rules that must not be broken
 
@@ -67,6 +75,7 @@ verified against a real account unless `CONTEXT.md` says so).
 sql/schema.sql            tables, ICP weights, signal rules
 sql/score_accounts.sql    the 0-100 score
 src/gtm_pipeline/         loader, scoring, enrich, export, hubspot, webhook, cli
+tools/gtm_review/         PR review agent: prechecks, rubric, model review, evals
 tests/                    pytest, fake network
 data/sample/              invented demo data (committed)
 data/private/             real data from FullEnrich (git-ignored)
