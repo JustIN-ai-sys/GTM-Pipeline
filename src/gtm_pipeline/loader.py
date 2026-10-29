@@ -24,7 +24,7 @@ PEOPLE_ALIASES = {
     "full": ["Person - Name", "Name"],
     "org": ["Person - Organization", "Organization"],
     "title": ["Person - Job title", "Job title"],
-    "email": ["Person - Email - Work", "Person - Email", "Email"],
+    "email": ["Person - Email - Work", "Person - Email", "Email", "Work Email"],
     "linkedin": ["Person - LinkedIn", "LinkedIn URL", "LinkedIn"],
 }
 DEAL_ALIASES = {
@@ -249,28 +249,40 @@ def load_signals(conn: sqlite3.Connection, path: str | Path) -> dict[str, int]:
             skipped += 1  # unknown account, or no source: refuse to store an unsourced claim
             continue
         status = (_pick(row, SIGNAL_ALIASES["status"]) or "unknown").lower()
-        if status not in SIGNAL_STATUSES:
-            status = "unknown"
-        conn.execute(
-            f"""
-            INSERT INTO signals (org_id, name, status, source, observed_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (org_id, name) DO UPDATE SET
-                status = CASE WHEN {KEEP_CONFIRMED} THEN signals.status ELSE excluded.status END,
-                source = CASE WHEN {KEEP_CONFIRMED} THEN signals.source ELSE excluded.source END,
-                observed_at = CASE WHEN {KEEP_CONFIRMED}
-                                   THEN signals.observed_at ELSE excluded.observed_at END
-            """,
-            (
-                org["id"],
-                name.lower(),
-                status,
-                source,
-                parse_date(_pick(row, SIGNAL_ALIASES["observed"])),
-            ),
+        upsert_signal(
+            conn,
+            org["id"],
+            name,
+            status,
+            source,
+            parse_date(_pick(row, SIGNAL_ALIASES["observed"])),
         )
         loaded += 1
     return {"signals": loaded, "signals_skipped": skipped}
+
+
+def upsert_signal(
+    conn: sqlite3.Connection,
+    org_id: int,
+    name: str,
+    status: str,
+    source: str,
+    observed_at: str | None,
+) -> None:
+    """Store one observed fact. A confirmed signal is never replaced by a weaker one."""
+    status = status if status in SIGNAL_STATUSES else "unknown"
+    conn.execute(
+        f"""
+        INSERT INTO signals (org_id, name, status, source, observed_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (org_id, name) DO UPDATE SET
+            status = CASE WHEN {KEEP_CONFIRMED} THEN signals.status ELSE excluded.status END,
+            source = CASE WHEN {KEEP_CONFIRMED} THEN signals.source ELSE excluded.source END,
+            observed_at = CASE WHEN {KEEP_CONFIRMED}
+                               THEN signals.observed_at ELSE excluded.observed_at END
+        """,
+        (org_id, name.lower(), status, source, observed_at),
+    )
 
 
 def load_suppressions(conn: sqlite3.Connection, path: str | Path) -> int:

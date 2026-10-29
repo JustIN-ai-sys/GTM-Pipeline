@@ -49,6 +49,7 @@ both and maps results back by LinkedIn URL; a test covers it.
 | `gtm serve` | Small webhook receiver that stores the emails FullEnrich sends back. |
 | `gtm fetch <id>` | Pulls the results of one enrichment by id, as a fallback to the webhook. |
 | `gtm import-results <file>` | Stores a saved result (JSON from the app, the API or the MCP connector). |
+| `gtm import-clay <file>` | Turns a Clay table export (CSV) into dated, sourced CRM signals for the score. |
 | `gtm export` | Writes the contacts ready to work as a lemlist or Pipedrive CSV. **Sends nothing.** |
 | `gtm push hubspot` | Writes the same contacts, their companies and account scores to HubSpot. **Dry run by default.** |
 | `gtm warehouse push` | Copies every table to Postgres or Supabase and creates the `account_scores` view. **Dry run by default.** |
@@ -62,7 +63,7 @@ below runs on invented sample data and spends nothing.
 git clone https://github.com/JustIN-ai-sys/GTM-Pipeline.git && cd GTM-Pipeline
 pip install -e ".[dev]"
 bash scripts/demo.sh      # load -> score -> enrichment dry run -> export -> HubSpot dry run
-pytest -q                 # 93 tests (4 need a Postgres, see Warehouse)
+pytest -q                 # 98 tests (4 need a Postgres, see Warehouse)
 ```
 
 `scripts/demo.sh` writes into `out/` (git-ignored). Each command is printed before it runs, so
@@ -173,6 +174,23 @@ the same rules as `fetch`.
 - **Never overwrites** an email that is already stored, and never stores an email on the
   suppression list.
 - **Errors do not leak the key.** HTTP errors raise a message with the status code only.
+
+## Clay
+
+Clay is where a GTM team enriches accounts. `gtm import-clay` brings a Clay table back as signals
+the score already uses:
+
+1. In Clay, import the companies (name and domain; `organizations.csv` has both) and add a
+   tech stack enrichment column.
+2. Export the table as CSV, then `gtm import-clay clay-export.csv --column "Tech Stack"`.
+3. `gtm score` re-ranks the accounts.
+
+Rows are matched by domain, else by exact company name; unknown companies are skipped, not
+created. A CRM named in the cell is `confirmed`, a filled cell without it is `not_found`, an
+empty cell stores nothing, and a `not_found` never replaces an earlier `confirmed`. People
+enriched in Clay load with `gtm load --people` (its `Work Email` column is read). What Clay
+reports is technology seen on a company's website, not proof the sales team uses that CRM: the
+source (`clay_tech_stack`) and the date are stored with each signal.
 
 ## Warehouse (Postgres, Supabase)
 
@@ -292,11 +310,11 @@ or the FullEnrich connector). Real data goes in
 
 ## Tests and CI
 
-`pytest` runs 93 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 98 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
 network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
 round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), the
-webhook server on a local port, and the review agent with a fake model client (prechecks, verdict
+Clay import (matching, empty cells, confirmed kept), the webhook server on a local port, and the review agent with a fake model client (prechecks, verdict
 merging, refusals, eval scoring). Four tests need a real Postgres (`GTM_TEST_PG_URL`, a
 database whose name contains `test`): the warehouse push, its rerun, its rollback, row level
 security and the score parity with SQLite. CI starts a Postgres 16 service for them. The GitHub
@@ -350,9 +368,9 @@ command succeeds, not what it prints.
 AGENTS.md CLAUDE.md CONTEXT.md   context for coding agents
 docs/       ICP and decisions
 sql/        schema, score, pipeline health
-src/        loader, scoring, enrich, export, hubspot, warehouse, webhook, cli
+src/        loader, scoring, enrich, clay, export, hubspot, warehouse, webhook, cli
 tools/      gtm_review: the pull request review agent, its rubric and evals
-tests/      93 tests
+tests/      98 tests
 scripts/    demo.sh, sample data generator, FullEnrich company search -> CSV
 data/sample fictional exports in Pipedrive's native header format
 ```

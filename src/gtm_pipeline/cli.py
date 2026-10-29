@@ -1,5 +1,5 @@
-"""Command line: init, load, score, health, enrich, fetch, import-results, export, push,
-warehouse, serve."""
+"""Command line: init, load, score, health, enrich, fetch, import-results, import-clay, export,
+push, warehouse, serve."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 
-from gtm_pipeline import enrich, export, hubspot, loader, scoring, warehouse
+from gtm_pipeline import clay, enrich, export, hubspot, loader, scoring, warehouse
 from gtm_pipeline.db import connect, init_db
 
 
@@ -161,6 +161,21 @@ def cmd_push(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_import_clay(args: argparse.Namespace) -> int:
+    conn = connect(args.db)
+    init_db(conn)
+    result = clay.import_tech_stack(conn, args.file, args.column, args.source, args.as_of)
+    print(
+        f"Clay rows: {result['rows']} · matched accounts: {result['matched']} · "
+        f"no data: {result['no_data']} · unknown companies: {result['unmatched']}"
+    )
+    print(
+        f"Signals: {result['confirmed']} confirmed, {result['not_found']} not found "
+        "(a not found never replaces a confirmed). Rescore with gtm score."
+    )
+    return 0
+
+
 def cmd_warehouse(args: argparse.Namespace) -> int:
     conn = connect(args.db)
     url = args.url or os.environ.get("DATABASE_URL")
@@ -292,6 +307,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--live", action="store_true", help="really call the HubSpot API")
     p.add_argument("--yes", action="store_true", help="confirm that the CRM will be written to")
     p.set_defaults(func=cmd_push)
+
+    p = sub.add_parser("import-clay", help="turn a Clay table export (CSV) into CRM signals")
+    p.add_argument("file")
+    p.add_argument("--column", default="Tech Stack", help="the tech stack column's name")
+    p.add_argument("--source", default="clay_tech_stack", help="stored as the signals' source")
+    p.add_argument("--as-of", help="YYYY-MM-DD stored as the observation date (default: today)")
+    p.set_defaults(func=cmd_import_clay)
 
     p = sub.add_parser(
         "warehouse", help="copy the database and the score view to Postgres or Supabase"

@@ -29,7 +29,7 @@ Private dataset details (aggregates only):
 
 ## What has been verified
 
-- 93 tests pass (4 against a real Postgres), ruff is clean, the pipeline runs end to end on both datasets.
+- 98 tests pass (4 against a real Postgres), ruff is clean, the pipeline runs end to end on both datasets.
 - The FullEnrich request format follows the public docs. **No `--live` run has been verified
   against a real account yet.**
 - Pilot 1 (2026-10-27, via the MCP `enrich_bulk` tool, work emails only): **8 emails found out
@@ -55,6 +55,8 @@ Private dataset details (aggregates only):
   `account_scores` view equals the SQLite score row for row on the sample data. Run once on the
   private data into a local Postgres (106 rows, 10 tables). Not yet run on Supabase: needs a
   project and `DATABASE_URL`.
+- `gtm import-clay`: tested on invented CSVs shaped like a Clay export; not yet run on a real
+  Clay table. The Clay connector in Claude Code is linked to the workspace "Justin".
 - The webhook payload shape is not documented. The parser accepts the shapes in the docs; check
   it against one real payload.
 
