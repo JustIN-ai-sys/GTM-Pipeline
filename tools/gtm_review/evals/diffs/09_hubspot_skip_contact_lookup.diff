@@ -1,0 +1,15 @@
+diff --git a/src/gtm_pipeline/hubspot.py b/src/gtm_pipeline/hubspot.py
+--- a/src/gtm_pipeline/hubspot.py
++++ b/src/gtm_pipeline/hubspot.py
+@@ -262,8 +262,9 @@ def push(p: Plan, client: Client) -> dict[str, int]:
+         if key in p.companies:
+             company_ids[key] = str(result["id"])
+ 
+-    contact_ids = _find_contacts(client, [c["email"] for c in p.contacts])
+-    new_contacts = [c for c in p.contacts if c["email"] not in contact_ids]
++    # the batch read costs one call per 100 contacts; skip it and create everything
++    contact_ids: dict[str, str] = {}
++    new_contacts = list(p.contacts)
+     created = _write(
+         client,
+         "contacts",

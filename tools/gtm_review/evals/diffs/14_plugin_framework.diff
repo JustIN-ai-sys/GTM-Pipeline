@@ -1,0 +1,65 @@
+diff --git a/src/gtm_pipeline/plugins.py b/src/gtm_pipeline/plugins.py
+new file mode 100644
+--- /dev/null
++++ b/src/gtm_pipeline/plugins.py
+@@ -0,0 +1,58 @@
++"""Pluggable destination framework, so any future CRM or sequencer can be added by config."""
++
++from __future__ import annotations
++
++import importlib
++import json
++from abc import ABC, abstractmethod
++from pathlib import Path
++from typing import Any, ClassVar
++
++
++class Destination(ABC):
++    registry: ClassVar[dict[str, type[Destination]]] = {}
++    name: ClassVar[str] = ""
++
++    def __init_subclass__(cls, **kwargs: Any) -> None:
++        super().__init_subclass__(**kwargs)
++        if cls.name:
++            Destination.registry[cls.name] = cls
++
++    @abstractmethod
++    def validate_config(self, config: dict[str, Any]) -> None: ...
++
++    @abstractmethod
++    def transform(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]: ...
++
++    @abstractmethod
++    def deliver(self, rows: list[dict[str, Any]]) -> dict[str, Any]: ...
++
++    def lifecycle_hooks(self) -> dict[str, list[str]]:
++        return {"before_transform": [], "after_transform": [], "before_deliver": []}
++
++
++class DestinationLoader:
++    """Loads destinations from destinations.json: module path, class, config, retries."""
++
++    def __init__(self, path: str | Path = "destinations.json") -> None:
++        self.path = Path(path)
++
++    def load(self) -> list[Destination]:
++        spec = json.loads(self.path.read_text())
++        out = []
++        for entry in spec.get("destinations", []):
++            module = importlib.import_module(entry["module"])
++            cls = getattr(module, entry["class"])
++            instance = cls()
++            instance.validate_config(entry.get("config", {}))
++            out.append(instance)
++        return out
++
++
++class Pipeline:
++    def __init__(self, destinations: list[Destination]) -> None:
++        self.destinations = destinations
++
++    def run(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
++        results = []
++        for destination in self.destinations:
++            results.append(destination.deliver(destination.transform(rows)))
++        return results

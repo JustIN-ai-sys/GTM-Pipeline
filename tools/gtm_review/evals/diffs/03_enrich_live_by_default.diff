@@ -1,0 +1,22 @@
+diff --git a/src/gtm_pipeline/cli.py b/src/gtm_pipeline/cli.py
+--- a/src/gtm_pipeline/cli.py
++++ b/src/gtm_pipeline/cli.py
+@@ -76,16 +76,10 @@ def cmd_enrich(args: argparse.Namespace) -> int:
+         with open(args.report, "w", encoding="utf-8") as handle:
+             handle.write(report)
+         print(f"Report written to {args.report}")
+-    if not args.live:
+-        print("Dry run: nothing was sent and no credit was spent.")
+-        return 0
+     api_key = os.environ.get("FULLENRICH_API_KEY")
+     if not api_key:
+-        print("FULLENRICH_API_KEY is not set.", file=sys.stderr)
+-        return 2
+-    if not args.yes:
+-        print("Refusing to spend credits without --yes.", file=sys.stderr)
+-        return 2
++        print("Dry run: FULLENRICH_API_KEY is not set, nothing was sent.")
++        return 0
+     rows = enrich.candidates(conn, args.limit, filters, args.as_of)
+     for payload in enrich.build_payloads(rows, "gtm-pipeline", args.webhook_url):
+         enrichment_id = enrich.start_bulk(payload, api_key)

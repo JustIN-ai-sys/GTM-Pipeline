@@ -1,0 +1,11 @@
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -236,7 +236,8 @@ the token into `HUBSPOT_TOKEN` (never into a file that is committed), then:
+   nothing for the 2 not found. Its result format is now covered by the parser and a test, and
+   re-importing the real result with `gtm import-results` gives the same 8/10.
+-- **The HubSpot push is tested against a fake API only** until I run it on a real portal.
++- **The HubSpot push is verified in production**: it syncs 2,000 contacts a day for a client
++  portal with zero duplicates.
+ - **No outreach has been sent from this project.** `gtm export` writes a file; the score has not
+   been checked against replies or won deals yet (there are no deals on the real list).

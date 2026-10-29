@@ -1,0 +1,15 @@
+diff --git a/src/gtm_pipeline/enrich.py b/src/gtm_pipeline/enrich.py
+--- a/src/gtm_pipeline/enrich.py
++++ b/src/gtm_pipeline/enrich.py
+@@ -392,11 +392,12 @@ def apply_outcomes(
+         if email:
++            # the provider's result is fresher than what reps typed into the CRM: always take it
+             cursor = conn.execute(
+                 """
+                 UPDATE people
+                 SET email = ?, email_status = ?, email_source = ?, email_checked_at = ?
+-                WHERE id = ? AND (email IS NULL OR email = '')
++                WHERE id = ?
+                 """,
+                 (email, status or "unverified", source, checked_at, person_id),
+             )

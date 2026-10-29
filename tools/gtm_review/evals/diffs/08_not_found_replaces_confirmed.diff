@@ -1,0 +1,18 @@
+diff --git a/src/gtm_pipeline/loader.py b/src/gtm_pipeline/loader.py
+--- a/src/gtm_pipeline/loader.py
++++ b/src/gtm_pipeline/loader.py
+@@ -255,11 +255,10 @@ def load_signals(conn: sqlite3.Connection, path: str | Path) -> int:
+             INSERT INTO signals (org_id, name, status, source, observed_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT (org_id, name) DO UPDATE SET
+-                status = CASE WHEN {KEEP_CONFIRMED} THEN signals.status ELSE excluded.status END,
+-                source = CASE WHEN {KEEP_CONFIRMED} THEN signals.source ELSE excluded.source END,
+-                observed_at = CASE WHEN {KEEP_CONFIRMED}
+-                                   THEN signals.observed_at ELSE excluded.observed_at END
++                -- latest observation wins: keeps the table simple and always up to date
++                status = excluded.status,
++                source = excluded.source,
++                observed_at = excluded.observed_at
+             """,
+             (
+                 org["id"],

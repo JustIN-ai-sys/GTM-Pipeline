@@ -1,0 +1,12 @@
+diff --git a/sql/score_accounts.sql b/sql/score_accounts.sql
+--- a/sql/score_accounts.sql
++++ b/sql/score_accounts.sql
+@@ -135,7 +135,7 @@ SELECT
+     pts_coverage,
+     pts_signals,
+     score,
+-    CASE WHEN score >= 70 THEN 'A' WHEN score >= 45 THEN 'B' ELSE 'C' END AS tier,
++    CASE WHEN score >= 60 THEN 'A' WHEN score >= 40 THEN 'B' ELSE 'C' END AS tier,
+     CASE
+         WHEN contacts = 0 THEN 'Add a contact'
+         WHEN contacts_with_email = 0 THEN 'Enrich contact emails'
