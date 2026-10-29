@@ -83,6 +83,14 @@ def test_precheck_flags_a_password_in_a_url_but_not_a_placeholder():
     ]
 
 
+def test_an_email_in_a_url_the_secret_rule_misses_is_still_flagged():
+    line = "postgresql://u:" + "ab" + "@realco.com/db"  # password too short for the secret rule
+    diff = f"--- a/f\n+++ b/x.py\n@@ -0,0 +1,1 @@\n+{line}\n"
+    assert [f.problem for f in precheck.run(diff)] == [
+        "Adds a real-looking email address (not an *.example domain)."
+    ]
+
+
 def test_an_email_after_a_url_scheme_without_a_password_is_still_flagged():
     line = "ftp://" + "jane.doe" + "@realco.com/files"
     diff = f"--- a/f\n+++ b/x.py\n@@ -0,0 +1,1 @@\n+{line}\n"

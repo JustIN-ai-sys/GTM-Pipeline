@@ -63,7 +63,7 @@ below runs on invented sample data and spends nothing.
 git clone https://github.com/JustIN-ai-sys/GTM-Pipeline.git && cd GTM-Pipeline
 pip install -e ".[dev]"
 bash scripts/demo.sh      # load -> score -> enrichment dry run -> export -> HubSpot dry run
-pytest -q                 # 102 tests (5 need a Postgres, see Warehouse)
+pytest -q                 # 104 tests (5 need a Postgres, see Warehouse)
 ```
 
 `scripts/demo.sh` writes into `out/` (git-ignored). Each command is printed before it runs, so
@@ -188,7 +188,10 @@ the score already uses:
 Rows are matched by domain, else by exact company name; unknown companies are skipped, not
 created. A CRM named in the cell is `confirmed`, a filled cell without it is `not_found`, an
 empty cell stores nothing, and a `not_found` never replaces an earlier `confirmed`. People
-enriched in Clay load with `gtm load --people` (its `Work Email` column is read). What Clay
+enriched in Clay load with `gtm load --people clay.csv --email-source clay_enrichment` (its
+`Work Email` column is read, and each email keeps Clay as its source). The match is on the
+product name, so Salesforce Marketing Cloud or Pardot also count as Salesforce: read a
+`clay_tech_stack` signal as "uses this vendor", not "the sales team works in this CRM". What Clay
 reports is technology seen on a company's website, not proof the sales team uses that CRM: the
 source (`clay_tech_stack`) and the date are stored with each signal.
 
@@ -311,14 +314,14 @@ or the FullEnrich connector). Real data goes in
 
 ## Tests and CI
 
-`pytest` runs 102 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 104 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
 network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
 round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), the
 Clay import (matching, empty cells, confirmed kept), the webhook server on a local port, and the review agent with a fake model client (prechecks, verdict
 merging, refusals, eval scoring). Five tests need a real Postgres (`GTM_TEST_PG_URL`, a
-database whose name contains `test`): the warehouse push, its rerun, its rollback, row level
-security and the score parity with SQLite. CI starts a Postgres 16 service for them. The GitHub
+database whose name contains `test`): push and rerun, tables in `public` left untouched,
+rollback, row level security, and the score parity with SQLite. CI starts a Postgres 16 service for them. The GitHub
 Actions workflow
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) lints with ruff, runs the tests on
 Python 3.11 to 3.13, then runs every command on the sample data. That last step checks that each
@@ -371,7 +374,7 @@ docs/       ICP and decisions
 sql/        schema, score, pipeline health
 src/        loader, scoring, enrich, clay, export, hubspot, warehouse, webhook, cli
 tools/      gtm_review: the pull request review agent, its rubric and evals
-tests/      102 tests
+tests/      104 tests
 scripts/    demo.sh, sample data generator, FullEnrich company search -> CSV
 data/sample fictional exports in Pipedrive's native header format
 ```

@@ -21,7 +21,7 @@ to work, then finds missing work emails through FullEnrich. Three layers, kept s
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                 # 102 tests (5 need GTM_TEST_PG_URL), standard library only at runtime
+pytest -q                 # 104 tests (5 need GTM_TEST_PG_URL), standard library only at runtime
 bash scripts/demo.sh      # whole pipeline on the sample data, spends nothing
 ruff check . && ruff format .
 gtm --db data/private/gtm.db init

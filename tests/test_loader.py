@@ -148,3 +148,12 @@ def test_clay_work_email_column_is_read(conn, tmp_path):
     people.write_text("First name,Last name,Organization,Work Email\nAda,L,Acme,ada@acme.example\n")
     loader.load_all(conn, orgs, people)
     assert conn.execute("SELECT email FROM people").fetchone()["email"] == "ada@acme.example"
+
+
+def test_email_source_names_where_the_emails_came_from(conn, tmp_path):
+    orgs = tmp_path / "o.csv"
+    orgs.write_text("Name\nAcme\n")
+    people = tmp_path / "p.csv"
+    people.write_text("First name,Last name,Organization,Work Email\nAda,L,Acme,ada@acme.example\n")
+    loader.load_all(conn, orgs, people, email_source="clay_enrichment")
+    assert conn.execute("SELECT email_source FROM people").fetchone()[0] == "clay_enrichment"

@@ -39,6 +39,7 @@ def cmd_load(args: argparse.Namespace) -> int:
         stages,
         signals=args.signals,
         suppressions=args.suppressions,
+        email_source=args.email_source,
     )
     print("Loaded:", ", ".join(f"{k}={v}" for k, v in counts.items()))
     return 0
@@ -232,6 +233,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("load", help="load organizations, people and deals CSV exports")
     p.add_argument("--orgs", required=True)
     p.add_argument("--people", help="people CSV (optional)")
+    p.add_argument(
+        "--email-source",
+        default="crm_import",
+        help="where the people's emails come from, stored with each email (e.g. clay_enrichment)",
+    )
     p.add_argument("--deals", help="deals CSV (optional)")
     p.add_argument(
         "--signals", help="CSV of observed facts: Organization, Signal, Status, Source, Observed at"

@@ -17,11 +17,10 @@ SECRET_PATTERNS = [
     re.compile(
         r"(?i)\b(?:api[_-]?key|secret|token|password)\b\s*[:=]\s*['\"][A-Za-z0-9_\-]{24,}['\"]"
     ),
-    # A password inside a connection URL (postgresql://user:pw@host). `<password>` passes.
-    re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@]+:[^\s@<>{}$]{4,}@"),
 ]
-# user:password@host inside a URL is a credential (checked above), not an email address.
-URL_CREDENTIALS = re.compile(r"://[^\s/@:]+:[^\s/@]*$")
+# A password inside a connection URL (postgresql://user:pw@host). `<password>` passes.
+URL_PASSWORD = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@]+:[^\s@<>{}$]{4,}@")
+SECRET_PATTERNS.append(URL_PASSWORD)
 EMAIL = re.compile(r"\b[A-Za-z0-9][A-Za-z0-9._%+-]*@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})\b")
 # Reserved names that can never be a real mailbox (RFC 2606), and GitHub's noreply aliases.
 ALLOWED_EMAIL_DOMAINS = (
@@ -118,8 +117,10 @@ def run(diff: str) -> list[Finding]:
                     )
                 )
                 break
+        # pw@host inside a URL already flagged as a secret is not also an email address.
+        credentials = [m.span() for m in URL_PASSWORD.finditer(text)]
         for match in EMAIL.finditer(text):
-            if URL_CREDENTIALS.search(text[: match.start()]):
+            if any(start <= match.start() < end for start, end in credentials):
                 continue
             if match.group(0).lower() not in ALLOWED_EMAILS and not _allowed_email(match.group(1)):
                 findings.append(

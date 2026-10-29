@@ -131,7 +131,10 @@ def load_organizations(conn: sqlite3.Connection, path: str | Path) -> int:
     return count
 
 
-def load_people(conn: sqlite3.Connection, path: str | Path) -> int:
+def load_people(
+    conn: sqlite3.Connection, path: str | Path, email_source: str = "crm_import"
+) -> int:
+    """Upsert people. `email_source` records where their emails come from (CRM, Clay...)."""
     count = 0
     for row in _read(path):
         first = _pick(row, PEOPLE_ALIASES["first"])
@@ -173,7 +176,7 @@ def load_people(conn: sqlite3.Connection, path: str | Path) -> int:
                 email,
                 _pick(row, PEOPLE_ALIASES["linkedin"]),
                 "unverified" if email else "missing",
-                "crm_import" if email else None,
+                email_source if email else None,
             ),
         )
         count += 1
@@ -310,6 +313,7 @@ def load_all(
     stages: list[str] | None = None,
     signals: str | Path | None = None,
     suppressions: str | Path | None = None,
+    email_source: str = "crm_import",
 ) -> dict[str, int]:
     """Load the exports in dependency order. Safe to re-run (upserts).
 
@@ -318,7 +322,7 @@ def load_all(
     ensure_stages(conn, stages or DEFAULT_STAGES)
     counts = {"organizations": load_organizations(conn, orgs)}
     if people:
-        counts["people"] = load_people(conn, people)
+        counts["people"] = load_people(conn, people, email_source)
     if deals:
         counts["deals"] = load_deals(conn, deals)
     if signals:
