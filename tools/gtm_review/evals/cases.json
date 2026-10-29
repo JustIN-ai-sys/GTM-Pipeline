@@ -1,0 +1,17 @@
+[
+  {"id": "01_clean_readme_wording", "expected": "approve", "rules": []},
+  {"id": "02_clean_export_limit_with_test", "expected": "approve", "rules": []},
+  {"id": "03_enrich_live_by_default", "expected": "block", "rules": ["R1"]},
+  {"id": "04_hubspot_push_when_token_set", "expected": "block", "rules": ["R1"]},
+  {"id": "05_private_people_committed", "expected": "block", "rules": ["R2"]},
+  {"id": "06_key_in_error_message", "expected": "block", "rules": ["R9", "R2"]},
+  {"id": "07_overwrite_stored_email", "expected": "block", "rules": ["R5"]},
+  {"id": "08_not_found_replaces_confirmed", "expected": "block", "rules": ["R4"]},
+  {"id": "09_hubspot_skip_contact_lookup", "expected": "block", "rules": ["R7", "G4"]},
+  {"id": "10_tier_threshold_untested", "expected": "needs_human", "rules": ["G1", "G2"]},
+  {"id": "11_readme_overclaim", "expected": "needs_human", "rules": ["G2"]},
+  {"id": "12_guess_language_from_name", "expected": "block", "rules": ["R8"]},
+  {"id": "13_skip_suppressions_before_paying", "expected": "block", "rules": ["R6"]},
+  {"id": "14_plugin_framework", "expected": "needs_human", "rules": ["G3", "G1"]},
+  {"id": "15_clean_context_next_step", "expected": "approve", "rules": []}
+]

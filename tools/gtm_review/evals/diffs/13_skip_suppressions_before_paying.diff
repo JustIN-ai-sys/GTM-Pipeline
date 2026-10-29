@@ -1,0 +1,13 @@
+diff --git a/src/gtm_pipeline/enrich.py b/src/gtm_pipeline/enrich.py
+--- a/src/gtm_pipeline/enrich.py
++++ b/src/gtm_pipeline/enrich.py
+@@ -118,8 +118,7 @@ def _reason(
+     has_key = bool(row["linkedin_url"]) or bool(row["domain"] and row["last_name"])
+     if not has_key:
+         return "no_lookup_key"
+-    if (row["domain"] and row["domain"].lower() in domains) or row["company"].lower() in orgs:
+-        return "suppressed"
++    # suppressions are re-checked at export time, so checking them here is redundant
+     employees = row["employees"]
+     if (filters.min_employees or filters.max_employees) and employees is None:
+         return "size_unknown"

@@ -1,0 +1,24 @@
+diff --git a/src/gtm_pipeline/cli.py b/src/gtm_pipeline/cli.py
+--- a/src/gtm_pipeline/cli.py
++++ b/src/gtm_pipeline/cli.py
+@@ -128,17 +128,14 @@ def cmd_push(args: argparse.Namespace) -> int:
+     result = export.ready_contacts(conn, args.as_of, args.min_score, args.include_unverified)
+     push_plan = hubspot.plan(result.rows)
+     print(hubspot.render_plan(push_plan))
+-    if not args.live:
+-        print("Dry run: nothing was sent to HubSpot.")
+-        return 0
+     token = os.environ.get("HUBSPOT_TOKEN")
+     if not token:
+-        print("HUBSPOT_TOKEN is not set.", file=sys.stderr)
+-        return 2
+-    if not args.yes:
+-        print("Refusing to write to the CRM without --yes.", file=sys.stderr)
+-        return 2
++        # no token configured: nothing to do, behave like a dry run
++        print("Dry run: nothing was sent to HubSpot.")
++        return 0
++    # a token in the environment means the user wants the sync to run (simpler for cron jobs)
+     client = hubspot.Client(token)
+     print(hubspot.push(push_plan, client), f"api_calls={client.calls}")
+     return 0

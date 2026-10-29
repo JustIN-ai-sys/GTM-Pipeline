@@ -10,3 +10,6 @@ out/
 data/private/
 .claude/settings.local.json
 RUNBOOK_FR.md
+review.md
+review.json
+eval-report.md

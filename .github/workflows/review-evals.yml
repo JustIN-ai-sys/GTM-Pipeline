@@ -1,0 +1,52 @@
+name: Reviewer evals
+
+# Re-measure the review agent whenever its prompt, rubric, code or eval cases change.
+# Fails if it misses a block, blocks a good change, or drops below the accuracy floor.
+
+on:
+  pull_request:
+    paths:
+      - "tools/gtm_review/**"
+      - "AGENTS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[review]"
+      - name: Run the evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e  # keep going on FAIL so the report still reaches the summary and the PR
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY is not set: evals skipped." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          PYTHONPATH=tools python -m gtm_review.run_evals --out eval-report.md
+          status=$?
+          cat eval-report.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+      - name: Post the scores on the pull request
+        if: always() && github.event_name == 'pull_request' && hashFiles('eval-report.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bash .github/scripts/upsert-comment.sh "<!-- gtm-evals -->" eval-report.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: eval-report.md
+          if-no-files-found: ignore

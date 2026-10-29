@@ -2,18 +2,21 @@
 
 Turn a CRM export into a ranked list of accounts to work, and fill in the missing contact emails.
 
-I built this from my own workflow: I manage a deal pipeline, I score which accounts deserve the
-next hour, and I enrich the contacts that have no email. Doing that by hand in a spreadsheet does
-not scale, so each step is now a small, tested command.
+I built it to automate work I was doing by hand in a spreadsheet: deciding which accounts deserve
+the next hour, and finding the emails of the people to contact there. Each step is now a small,
+tested command, and every pull request gets an automated review by an agent (see
+[Review agent](#review-agent) for what it checks and its limits).
 
 ```
-CRM export (CSV)  ->  SQLite  ->  SQL account score  ->  ranked list + next action
-                         ^                                        |
-                         |  emails found                          v
-              FullEnrich bulk API  <-  contacts with no email     gtm export
-              (webhook, fetch or saved JSON)                      |
-                                                                  v
-                                           lemlist / Pipedrive CSV (verified, not suppressed)
+CRM export or company list (CSV) -> SQLite -> SQL account score -> ranked list + next action
+                                       ^                                   |
+                                       | emails found                      v
+                  FullEnrich  <-  contacts with no email     gtm export / gtm push hubspot
+                  (API, webhook or saved JSON result)                      |
+                                                                           v
+                              lemlist or Pipedrive CSV, or HubSpot (verified, not suppressed)
+
+pull request -> prechecks + review agent (rubric, evals) -> comment + pass / fail check
 ```
 
 ## Results so far
@@ -25,8 +28,11 @@ of this repository):
 - **People**: 13 decision makers found at 9 of the top 10 accounts with the free people search
   (founders, chiefs of staff, RevOps, sales).
 - **Pilot enrichment, 10 contacts: 8 work emails found, all `DELIVERABLE`, 8 credits spent**
-  (nothing charged for the 2 not found, which are now in a 90-day cooldown).
-- **Hand-off**: 8 contacts at 6 accounts exported for a sequencer, best accounts first.
+  (nothing charged for the 2 not found, which are now in a 90-day cooldown). I sent the 10
+  contacts through the FullEnrich connector in Claude Code, not through `gtm enrich --live` (I
+  had no API key yet), then stored the saved result with `gtm import-results`.
+- **Hand-off**: 8 contacts at 6 accounts written to a CSV for a sequencer, best accounts first.
+  Not imported or sent yet.
 
 What I learned from the pilot: the result format of the FullEnrich connector differs from the
 one in the API docs (no `custom` field, `work_emails` instead of `emails`). The parser now reads
@@ -46,24 +52,20 @@ both and maps results back by LinkedIn URL; a test covers it.
 | `gtm export` | Writes the contacts ready to work as a lemlist or Pipedrive CSV. **Sends nothing.** |
 | `gtm push hubspot` | Writes the same contacts, their companies and account scores to HubSpot. **Dry run by default.** |
 
-## Quick start
+## Quick start (2 minutes)
 
-Python 3.11+. No runtime dependencies (standard library only).
+Python 3.11+. No runtime dependencies (standard library only). No API key needed: everything
+below runs on invented sample data and spends nothing.
 
 ```bash
+git clone https://github.com/JustIN-ai-sys/GTM-Pipeline.git && cd GTM-Pipeline
 pip install -e ".[dev]"
-python scripts/make_sample_data.py          # fictional data, already committed in data/sample
-
-gtm init
-gtm load --orgs data/sample/organizations.csv \
-         --people data/sample/people.csv --deals data/sample/deals.csv \
-         --signals data/sample/signals.csv --suppressions data/sample/suppressions.csv
-gtm score --as-of 2026-10-26 --top 8 --out out.csv
-gtm health --as-of 2026-10-26
-gtm enrich --limit 30 --min-employees 20    # dry run: a report, spends nothing
-gtm export --format lemlist --out out/lemlist.csv --min-score 45 --include-unverified
-pytest
+bash scripts/demo.sh      # load -> score -> enrichment dry run -> export -> HubSpot dry run
+pytest -q                 # 84 tests
 ```
+
+`scripts/demo.sh` writes into `out/` (git-ignored). Each command is printed before it runs, so
+you can rerun any step by hand.
 
 What it prints on the sample data (invented companies):
 
@@ -157,15 +159,16 @@ request is built:
 
 Then it calls `POST https://app.fullenrich.com/api/v2/contact/enrich/bulk` in batches of 100.
 Each contact carries its own `person_id` in the `custom` field, so results map back to the right
-row. Results that come back without it (the FullEnrich MCP connector, or a JSON exported from the
-app) are mapped by normalized LinkedIn URL; `gtm import-results <file>` stores such a file with
+row. Results that come back without it (the FullEnrich MCP connector does this) are mapped by
+normalized LinkedIn URL; `gtm import-results <file>` stores such a file with
 the same rules as `fetch`.
 
 - **Start with `--limit 10`.** Read the hit rate, then rerun on the rest. Reruns are cheap: found
   contacts have an email, and "not found" is remembered in `enrichment_attempts`.
 - **Every email keeps its source and date** (`email_source`, `email_checked_at`).
-- **Webhook first.** `gtm serve` stores what FullEnrich posts back. Set `WEBHOOK_TOKEN`; requests
-  without the right `?token=` get a 401. `gtm fetch <id>` is the fallback.
+- **Webhook or fetch.** `gtm serve` is built to store what FullEnrich posts back (tested on the
+  payload shapes in the docs, not yet on a real callback). Set `WEBHOOK_TOKEN`; requests without
+  the right `?token=` get a 401. `gtm fetch <id>` pulls the same results on demand.
 - **Never overwrites** an email that is already stored, and never stores an email on the
   suppression list.
 - **Errors do not leak the key.** HTTP errors raise a message with the status code only.
@@ -182,8 +185,9 @@ imports it.
   have grown since the enrichment.
 - `--min-score N` leaves out weak accounts.
 - **Each row says why the contact was chosen**: account score, confirmed CRM signals and next
-  action. In lemlist they become variables (`{{accountScore}}`, `{{crmUsed}}`,
-  `{{nextAction}}`); in Pipedrive they go in the note, with the email's source and check date.
+  action. The lemlist file has them as extra columns (`accountScore`, `crmUsed`,
+  `nextAction`), meant to become custom variables on import (not tried yet); in Pipedrive they
+  go in the note, with the email's source and check date.
 - The Pipedrive format uses the same headers the loader reads, so an export loads back with
   `gtm load --people` without duplicates (a test covers it).
 
@@ -195,7 +199,8 @@ their companies and the account score.
 - **Dry run by default**: it prints how many companies and contacts it would write. It calls the
   API only with `--live --yes` and `HUBSPOT_TOKEN` set.
 - **No duplicates**: companies are matched by domain (else exact name), contacts by email. A
-  rerun updates instead of creating.
+  rerun updates instead of creating. So far this is tested against an in-memory fake of the API
+  only; the first run on a real HubSpot portal is still to do.
 - **The CRM keeps its own data**: on an existing record only the `gtm_*` properties change
   (`gtm_score`, `gtm_tier`, `gtm_next_action`, `gtm_signals` on companies; `gtm_reason`,
   `gtm_email_source` on contacts), never a name, title or owner a rep may have edited. The
@@ -212,22 +217,63 @@ gtm push hubspot --min-score 40                # dry run: counts only
 gtm push hubspot --min-score 40 --live --yes   # writes to HubSpot
 ```
 
+## Review agent
+
+Every pull request is reviewed by an agent
+([`.github/workflows/review.yml`](.github/workflows/review.yml)), the way a senior GTM engineer
+would review it: does the change protect money, people's data, the CRM, and the truth of what
+the README claims?
+
+1. **Prechecks** ([`tools/gtm_review/precheck.py`](tools/gtm_review/precheck.py)), no model:
+   regexes on the added lines for API keys, real email addresses (anything not on an `.example`
+   domain) and private files (`data/private/`, `*.db`, `.env`). A hit makes the verdict `block`.
+2. **Model review** ([`tools/gtm_review/review.py`](tools/gtm_review/review.py)): Claude reads the
+   [rubric](tools/gtm_review/rubric.md), the repo's own rules (`AGENTS.md`) and the diff, and
+   returns a verdict (`approve`, `needs_human`, `block`) with findings tied to a rule (R1 spend
+   gate ... R9 no key leak, G1 untested behaviour, G2 docs overclaim, G3 scope creep, G4 bug),
+   as JSON checked against a schema. A refusal, a cut-off answer or a diff too large to read whole
+   becomes `needs_human`, never a pass.
+3. **Gate**: the worst finding sets the verdict. The agent posts it as a comment on the pull
+   request and fails the check on `block`. The check stops a merge only once it is made a
+   required status check in the branch protection rules of `main`.
+
+**Evals** ([`tools/gtm_review/evals/`](tools/gtm_review/evals/)): 15 labelled diffs against this
+repo: 9 that must be blocked (live by default, a CRM write without `--yes`, a committed contact
+list, the API key in an error message, an overwritten email, a `not_found` replacing a
+`confirmed`, duplicates on rerun, guessing a language from a first name, suppressions skipped
+before paying), 3 that need a human (untested tier change, README overclaim, a plugin framework
+nobody asked for) and 3 clean ones. `run_evals.py` fails if the agent misses one block, blocks one
+good change, gets under 80% exact verdicts, or cites the right rule in under 80% of cases. It runs
+in CI whenever the reviewer, its rubric or `AGENTS.md` changes
+([`.github/workflows/review-evals.yml`](.github/workflows/review-evals.yml)).
+
+```bash
+pip install -e ".[review]"
+export ANTHROPIC_API_KEY=...                                  # without it: prechecks only
+PYTHONPATH=tools python -m gtm_review.review --base origin/main    # review your branch
+PYTHONPATH=tools python -m gtm_review.run_evals                     # measure the reviewer
+```
+
 ## Using it with Claude Code
 
 The repository is set up so Claude Code starts with the right context: `CLAUDE.md` imports
 `AGENTS.md` (architecture, commands, rules such as "never spend credits without approval"),
 `CONTEXT.md` says what data is loaded and what the next step is, and `docs/` records the ICP and
-the decisions. `/enrich-pilot` runs the gated 10-contact pilot. Real data goes in
+the decisions. `/enrich-pilot` walks through the gated 10-contact pilot (report, balance, approval, then the API
+or the FullEnrich connector). Real data goes in
 `data/private/`, which git ignores.
 
 ## Tests and CI
 
-`pytest` runs 67 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 84 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
 network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
-round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), and the webhook server on a local port. The GitHub Actions workflow
+round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), the
+webhook server on a local port, and the review agent with a fake model client (prechecks, verdict
+merging, refusals, eval scoring). The GitHub Actions workflow
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) lints with ruff, runs the tests on
-Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke test, export included.
+Python 3.11 to 3.13, then runs every command on the sample data. That last step checks that each
+command succeeds, not what it prints.
 
 ## Limits (read before relying on it)
 
@@ -242,10 +288,21 @@ Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke 
   nothing for the 2 not found. Its result format is now covered by the parser and a test, and
   re-importing the real result with `gtm import-results` gives the same 8/10.
 - **The HubSpot push is tested against a fake API only** until I run it on a real portal.
+- **The review agent ran for real for the first time on 2026-10-29**, on its own pull request.
+  Evals: 15/15 exact verdicts, 0 missed blocks, 0 false blocks, the expected rule cited in 15/15.
+  That is one run on 15 cases I wrote myself, together with the rubric: a small, friendly set,
+  not proof that it generalises. Its first review flagged one overclaim in this very README
+  ("before it can be merged"), a CI bug that hid failing eval reports, and one false positive
+  (it thought `gtm load` did not create the schema). The second flagged that a pull request
+  could weaken its own reviewer and that a leaked key would still be sent to the model. The leak
+  is fixed. The reviewer's code, rubric and `AGENTS.md` now come from `main`, but the workflow
+  file itself still comes from the pull request, so a pull request can still switch the gate off
+  until `.github/` is protected (CODEOWNERS plus a required review, or a ruleset). The scores are posted on each pull request that changes the reviewer.
 - **No outreach has been sent from this project.** `gtm export` writes a file; the score has not
   been checked against replies or won deals yet (there are no deals on the real list).
-- SQLite, not a warehouse. The SQL uses standard CTEs; moving to Postgres or BigQuery means
-  replacing `julianday()` with date arithmetic and adding a loading step.
+- SQLite, not a warehouse. Moving to Postgres or BigQuery means replacing the SQLite-specific
+  SQL (`julianday()`, two-argument `MIN`/`MAX`, `GROUP_CONCAT`, `INSERT OR IGNORE`,
+  `datetime('now')`) and the `sqlite3` connection layer.
 - The score is a transparent heuristic, not a model. The weights are my judgment, not tuned on
   conversion data.
 - Single-user: no authentication on `serve` beyond the shared token, no TLS (put it behind a
@@ -253,9 +310,10 @@ Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke 
 
 ## Next steps
 
-1. Run the first real pilot (10 contacts) and check the webhook payload against the parser.
-2. Pull deals directly from the Pipedrive API instead of CSV.
-3. Back-test the score: do tier A accounts actually convert more? Adjust weights from the data.
+1. Make the `review` check a required status check on `main`.
+2. Run `gtm push hubspot --live --yes` once on a real HubSpot portal.
+3. Move the data to Postgres (Supabase).
+4. Back-test the score: do tier A accounts actually convert more? Adjust weights from the data.
 
 ## Layout
 
@@ -263,8 +321,9 @@ Python 3.11 to 3.13, then runs the whole pipeline on the sample data as a smoke 
 AGENTS.md CLAUDE.md CONTEXT.md   context for coding agents
 docs/       ICP and decisions
 sql/        schema, score, pipeline health
-src/        loader, scoring, enrich, webhook, cli
-tests/      45 tests
-scripts/    sample data generator, FullEnrich company search -> CSV
+src/        loader, scoring, enrich, export, hubspot, webhook, cli
+tools/      gtm_review: the pull request review agent, its rubric and evals
+tests/      84 tests
+scripts/    demo.sh, sample data generator, FullEnrich company search -> CSV
 data/sample fictional exports in Pipedrive's native header format
 ```

@@ -1,0 +1,14 @@
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1,8 +1,8 @@
+ # gtm-pipeline
+ 
+ Turn a CRM export into a ranked list of accounts to work, and fill in the missing contact emails.
+ 
+-Doing that by hand in a spreadsheet does
+-not scale, so each step is now a small, tested command.
++Doing that by hand in a spreadsheet does not scale, so each step is now a small, tested
++command.
+ 
+ ```

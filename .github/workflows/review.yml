@@ -1,0 +1,60 @@
+name: GTM review
+
+# An agent reviews every pull request against tools/gtm_review/rubric.md and AGENTS.md,
+# posts its verdict as a comment, and fails the check on `block`.
+# Needs the repository secret ANTHROPIC_API_KEY; without it only the prechecks run.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[review]"
+      - name: Use the reviewer and rules from the base branch
+        # A pull request must not be able to weaken the gate that reviews it.
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          if git cat-file -e "origin/$BASE_REF:tools/gtm_review/review.py" 2>/dev/null; then
+            git checkout "origin/$BASE_REF" -- tools/gtm_review AGENTS.md
+            echo "Reviewer, rubric and AGENTS.md taken from $BASE_REF."
+          else
+            echo "No reviewer on $BASE_REF yet: using this pull request's copy."
+          fi
+      - name: Review the diff
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BASE: origin/${{ github.base_ref || 'main' }}
+        run: |
+          set +e
+          PYTHONPATH=tools python -m gtm_review.review --base "$BASE" --out review.md --json review.json
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          cat review.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Post the verdict on the pull request
+        if: github.event_name == 'pull_request'
+        continue-on-error: true  # fork pull requests get a read-only token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bash .github/scripts/upsert-comment.sh "<!-- gtm-review -->" review.md
+      - name: Fail the check on block
+        if: steps.review.outputs.exit != '0'
+        run: |
+          echo "The review agent blocked this pull request. See the comment for the findings."
+          exit 1

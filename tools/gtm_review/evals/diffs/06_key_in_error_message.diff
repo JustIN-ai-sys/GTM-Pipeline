@@ -1,0 +1,16 @@
+diff --git a/src/gtm_pipeline/enrich.py b/src/gtm_pipeline/enrich.py
+--- a/src/gtm_pipeline/enrich.py
++++ b/src/gtm_pipeline/enrich.py
+@@ -237,9 +237,13 @@ def _request(
+     try:
+         with opener(request, timeout=timeout) as response:
+             return json.loads(response.read().decode("utf-8"))
+     except urllib.error.HTTPError as exc:
+-        raise EnrichError(f"FullEnrich returned HTTP {exc.code} for {method} {url}") from None
++        # more context makes 401s much easier to debug
++        raise EnrichError(
++            f"FullEnrich returned HTTP {exc.code} for {method} {url} "
++            f"(request headers: {request.headers})"
++        ) from None
+     except urllib.error.URLError as exc:
+         raise EnrichError(f"Could not reach FullEnrich: {exc.reason}") from None

@@ -1,0 +1,40 @@
+diff --git a/src/gtm_pipeline/cli.py b/src/gtm_pipeline/cli.py
+--- a/src/gtm_pipeline/cli.py
++++ b/src/gtm_pipeline/cli.py
+@@ -118,8 +118,10 @@ def cmd_import_results(args: argparse.Namespace) -> int:
+ def cmd_export(args: argparse.Namespace) -> int:
+     conn = connect(args.db)
+     result = export.ready_contacts(conn, args.as_of, args.min_score, args.include_unverified)
++    if args.limit:
++        result = export.ExportResult(result.rows[: args.limit], result.skipped)
+     export.write_csv(result.rows, args.out, args.format)
+     print(export.render_summary(result, args.format, args.out))
+     return 0
+ 
+@@ -243,6 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
+     p.add_argument("--format", choices=sorted(export.FORMATS), default="lemlist")
+     p.add_argument("--out", required=True, help="CSV path; it holds personal data, keep it private")
+     p.add_argument("--min-score", type=int, default=0, help="leave out accounts below this score")
++    p.add_argument("--limit", type=int, help="export at most N contacts, best accounts first")
+     p.add_argument(
+         "--include-unverified",
+         action="store_true",
+diff --git a/tests/test_export.py b/tests/test_export.py
+--- a/tests/test_export.py
++++ b/tests/test_export.py
+@@ -128,3 +128,15 @@ def test_export_command_on_sample_data(sample_conn, tmp_path, capsys):
+     assert rows and all(r["email"].endswith(".example") for r in rows)
+     scores = [int(r["accountScore"]) for r in rows]
+     assert scores == sorted(scores, reverse=True)
++
++
++def test_export_limit_keeps_the_best_contacts(sample_conn, tmp_path):
++    from gtm_pipeline import cli
++
++    db = sample_conn.execute("PRAGMA database_list").fetchone()["file"]
++    out = tmp_path / "out.csv"
++    args = ["--db", db, "export", "--out", str(out), "--include-unverified", "--limit", "3"]
++    assert cli.main(args + ["--as-of", AS_OF]) == 0
++    with open(out, newline="") as handle:
++        scores = [int(r["accountScore"]) for r in csv.DictReader(handle)]
++    assert len(scores) == 3 and scores == sorted(scores, reverse=True)

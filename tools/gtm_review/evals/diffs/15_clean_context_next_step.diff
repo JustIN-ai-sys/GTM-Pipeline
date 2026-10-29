@@ -1,0 +1,11 @@
+diff --git a/CONTEXT.md b/CONTEXT.md
+--- a/CONTEXT.md
++++ b/CONTEXT.md
+@@ -55,6 +55,8 @@
+ 4. Verify a real `--live` run once an API key is available.
+ 5. Back-test the score once real deals or replies exist.
++6. Run `gtm push hubspot --live --yes` once on a free HubSpot portal with the sample data and
++   record what the real API returns.
+ 
+ ## Open questions
+ 

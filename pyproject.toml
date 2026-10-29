@@ -12,6 +12,7 @@ dependencies = []  # standard library only at runtime
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
+review = ["anthropic>=2.3"]  # tools/gtm_review: the PR review agent and its evals
 
 [project.scripts]
 gtm = "gtm_pipeline.cli:main"
@@ -20,12 +21,12 @@ gtm = "gtm_pipeline.cli:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tools"]
 testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests", "scripts"]
+src = ["src", "tests", "scripts", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

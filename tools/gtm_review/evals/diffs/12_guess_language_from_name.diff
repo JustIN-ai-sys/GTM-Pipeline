@@ -1,0 +1,33 @@
+diff --git a/src/gtm_pipeline/export.py b/src/gtm_pipeline/export.py
+--- a/src/gtm_pipeline/export.py
++++ b/src/gtm_pipeline/export.py
+@@ -38,6 +38,16 @@ SIGNAL_LABELS = {
+     "crm_pipedrive": "Pipedrive",
+ }
+ 
++# First names that are usually French, Spanish or German speakers, to pick the sequence language.
++NAME_LANGUAGE = {
++    "jean": "fr", "marie": "fr", "pierre": "fr", "camille": "fr",
++    "carlos": "es", "maria": "es", "javier": "es",
++    "hans": "de", "lukas": "de", "anna": "de",
++}
++
++
++def guess_language(first_name: str) -> str:
++    return NAME_LANGUAGE.get(first_name.strip().lower(), "en")
++
+ # Column order per destination. lemlist maps unknown columns to custom variables, which can be
+ # used in templates as {{accountScore}}, {{crmUsed}}, ... Pipedrive headers match the loader's
+ # aliases, so an export can be loaded back with `gtm load --people`.
+@@ -56,6 +66,7 @@ FORMATS: dict[str, list[tuple[str, str]]] = {
+         ("accountScore", "score"),
+         ("crmUsed", "crm_used"),
+         ("nextAction", "next_action"),
++        ("language", "language"),
+     ],
+@@ -140,6 +151,7 @@ def _row(person: sqlite3.Row, account: sqlite3.Row) -> dict[str, Any]:
+         "tier": account["tier"],
+         "crm_used": crm_used,
+         "next_action": account["next_action"],
++        "language": guess_language(person["first_name"]),
+         "provenance": provenance,

@@ -29,7 +29,7 @@ Private dataset details (aggregates only):
 
 ## What has been verified
 
-- 67 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
+- 84 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
 - The FullEnrich request format follows the public docs. **No `--live` run has been verified
   against a real account yet.**
 - Pilot 1 (2026-10-27, via the MCP `enrich_bulk` tool, work emails only): **8 emails found out
@@ -42,11 +42,23 @@ Private dataset details (aggregates only):
 - `gtm push hubspot` is tested against an in-memory fake API only. Dry run on the private data:
   6 companies, 8 contacts. Not yet run on a real HubSpot portal (needs `HUBSPOT_TOKEN`, and
   `api.hubapi.com` is blocked in the cloud session: run it locally or allow the host).
+- Review agent (`tools/gtm_review/`, `.github/workflows/review.yml`): prechecks and verdict logic
+  are unit-tested with a fake model client. **First real run on 2026-10-29** (PR #1, with the
+  `ANTHROPIC_API_KEY` repository secret): the model review ran (verdict `needs_human`: one README
+  overclaim, one workflow bug, one false positive about `gtm load` not creating the schema) and
+  the 15-case evals passed: 15/15 exact verdicts, 0 missed / 0 false blocks, rule recall 15/15
+  (one run, cases written by the same author as the rubric). The reviewer's code, rubric and
+  AGENTS.md now come from the base branch (the workflow file still comes from the PR), and the
+  model is skipped when a precheck finds a secret or personal data.
+  The check is not yet a required status check on `main`.
 - The webhook payload shape is not documented. The parser accepts the shapes in the docs; check
   it against one real payload.
 
 ## Next steps
 
+0. Make the `review` check required in the branch protection of `main` and protect `.github/`
+   (CODEOWNERS + required review, or a ruleset); open every change as a
+   pull request so the agent reviews it; add harder eval cases written by someone else.
 1. Hit rate is above 6/10: enrich the remaining 3 eligible people (max 3 credits), then search
    people for the next companies in the ranking.
 2. Add suppressions (customers, opt-outs) before any larger run or any export.

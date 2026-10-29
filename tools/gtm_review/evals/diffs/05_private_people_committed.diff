@@ -1,0 +1,9 @@
+diff --git a/data/private/people.csv b/data/private/people.csv
+new file mode 100644
+--- /dev/null
++++ b/data/private/people.csv
+@@ -0,0 +1,4 @@
++Organization,First name,Last name,Job title,Email,LinkedIn URL
++Brightwave Analytics,Jordan,Reyes,VP Sales,jordan.reyes@brightwave-analytics.test,https://www.linkedin.com/in/jordan-reyes-invented
++Brightwave Analytics,Sam,Okafor,Head of RevOps,sam.okafor@brightwave-analytics.test,https://www.linkedin.com/in/sam-okafor-invented
++Lumenly,Priya,Natarajan,Chief of Staff,priya@lumenly.test,https://www.linkedin.com/in/priya-natarajan-invented
