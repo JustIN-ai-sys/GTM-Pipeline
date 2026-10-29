@@ -190,7 +190,7 @@ created. A CRM named in the cell is `confirmed`, a filled cell without it is `no
 empty cell stores nothing, and a `not_found` never replaces an earlier `confirmed`. People
 enriched in Clay load with `gtm load --people clay.csv --email-source clay_enrichment` (its
 `Work Email` column is read, and each email keeps Clay as its source). The match is on the
-product name, so Salesforce Marketing Cloud or Pardot also count as Salesforce: read a
+vendor name, so any product named Salesforce (Marketing Cloud, Commerce Cloud) counts: read a
 `clay_tech_stack` signal as "uses this vendor", not "the sales team works in this CRM". What Clay
 reports is technology seen on a company's website, not proof the sales team uses that CRM: the
 source (`clay_tech_stack`) and the date are stored with each signal.
