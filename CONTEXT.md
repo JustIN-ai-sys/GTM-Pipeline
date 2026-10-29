@@ -29,7 +29,7 @@ Private dataset details (aggregates only):
 
 ## What has been verified
 
-- 81 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
+- 83 tests pass, ruff is clean, the pipeline runs end to end on both datasets.
 - The FullEnrich request format follows the public docs. **No `--live` run has been verified
   against a real account yet.**
 - Pilot 1 (2026-10-27, via the MCP `enrich_bulk` tool, work emails only): **8 emails found out

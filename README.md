@@ -4,7 +4,8 @@ Turn a CRM export into a ranked list of accounts to work, and fill in the missin
 
 I built it to automate work I was doing by hand in a spreadsheet: deciding which accounts deserve
 the next hour, and finding the emails of the people to contact there. Each step is now a small,
-tested command, and every pull request is reviewed by an agent before it is merged.
+tested command, and every pull request gets an automated review by an agent (see
+[Review agent](#review-agent) for what it checks and its limits).
 
 ```
 CRM export or company list (CSV) -> SQLite -> SQL account score -> ranked list + next action
@@ -60,7 +61,7 @@ below runs on invented sample data and spends nothing.
 git clone https://github.com/JustIN-ai-sys/GTM-Pipeline.git && cd GTM-Pipeline
 pip install -e ".[dev]"
 bash scripts/demo.sh      # load -> score -> enrichment dry run -> export -> HubSpot dry run
-pytest -q                 # 81 tests
+pytest -q                 # 83 tests
 ```
 
 `scripts/demo.sh` writes into `out/` (git-ignored). Each command is printed before it runs, so
@@ -264,7 +265,7 @@ or the FullEnrich connector). Real data goes in
 
 ## Tests and CI
 
-`pytest` runs 81 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 83 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
 network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
 round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), the
@@ -320,7 +321,7 @@ docs/       ICP and decisions
 sql/        schema, score, pipeline health
 src/        loader, scoring, enrich, export, hubspot, webhook, cli
 tools/      gtm_review: the pull request review agent, its rubric and evals
-tests/      81 tests
+tests/      83 tests
 scripts/    demo.sh, sample data generator, FullEnrich company search -> CSV
 data/sample fictional exports in Pipedrive's native header format
 ```

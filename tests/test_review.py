@@ -45,9 +45,9 @@ def _finding(severity, rule="G4"):
 
 def test_precheck_flags_secrets_real_emails_and_private_files():
     diff = (
-        "+++ b/data/private/people.csv\n@@ -0,0 +1,2 @@\n"
+        "--- a/f\n+++ b/data/private/people.csv\n@@ -0,0 +1,2 @@\n"
         f"+a,b,{REAL_EMAIL}\n"
-        "+++ b/src/x.py\n@@ -1,1 +1,2 @@\n"
+        "--- a/f\n+++ b/src/x.py\n@@ -1,1 +1,2 @@\n"
         f"+API_KEY = '{FAKE_KEY}'\n"
     )
     found = precheck.run(diff)
@@ -60,7 +60,7 @@ def test_precheck_flags_secrets_real_emails_and_private_files():
 
 def test_precheck_allows_invented_domains_and_placeholders():
     diff = (
-        "+++ b/tests/test_x.py\n@@ -1,1 +1,4 @@\n"
+        "--- a/f\n+++ b/tests/test_x.py\n@@ -1,1 +1,4 @@\n"
         "+EMAIL = 'ada" + "@strong.example'\n"
         "+hubspot.Client('pat-secret-token')\n"
         "+Co-Authored-By: Claude <noreply" + "@anthropic.com>\n"
@@ -71,8 +71,21 @@ def test_precheck_allows_invented_domains_and_placeholders():
     assert precheck.run(diff) == []
 
 
+def test_precheck_only_allows_the_exact_trailer_address():
+    trailer = "noreply" + "@anthropic.com"
+    contact = "jane" + "@anthropic.com"
+    diff = f"--- a/f\n+++ b/x.py\n@@ -0,0 +1,2 @@\n+{trailer}\n+{contact}\n"
+    assert [f.line for f in precheck.run(diff)] == [2]
+
+
+def test_added_lines_starting_with_plus_plus_are_scanned():
+    diff = f"--- a/x.py\n+++ b/x.py\n@@ -0,0 +1,1 @@\n+++ {REAL_EMAIL}\n"
+    assert precheck.added_lines(diff) == [("x.py", 1, f"++ {REAL_EMAIL}")]
+    assert len(precheck.run(diff)) == 1
+
+
 def test_added_lines_follow_hunk_line_numbers():
-    diff = "+++ b/a.py\n@@ -10,3 +10,4 @@\n same\n-old\n+new\n same\n"
+    diff = "--- a/a.py\n+++ b/a.py\n@@ -10,3 +10,4 @@\n same\n-old\n+new\n same\n"
     assert precheck.added_lines(diff) == [("a.py", 11, "new")]
 
 
@@ -108,7 +121,7 @@ def test_worst_finding_sets_the_verdict():
 
 
 def test_a_precheck_hit_blocks_even_if_the_model_approves():
-    diff = f"+++ b/src/x.py\n@@ -1,1 +1,1 @@\n+contact = '{REAL_EMAIL}'\n"
+    diff = f"--- a/f\n+++ b/src/x.py\n@@ -1,1 +1,1 @@\n+contact = '{REAL_EMAIL}'\n"
     client = FakeClient(_answer("approve"))
     result = review.review(diff, client)
     assert result["verdict"] == "block" and result["prechecks"] == 1
@@ -147,7 +160,7 @@ def test_cli_exit_code_is_1_only_on_block(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     clean, leak = tmp_path / "clean.diff", tmp_path / "leak.diff"
     clean.write_text(CLEAN)
-    leak.write_text("+++ b/.env\n@@ -0,0 +1,1 @@\n+X=1\n")
+    leak.write_text("--- a/f\n+++ b/.env\n@@ -0,0 +1,1 @@\n+X=1\n")
     assert review.main(["--diff-file", str(clean), "--out", str(tmp_path / "c.md")]) == 0
     assert review.main(["--diff-file", str(leak)]) == 1
 

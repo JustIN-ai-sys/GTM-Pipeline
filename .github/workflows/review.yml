@@ -47,6 +47,7 @@ jobs:
           cat review.md >> "$GITHUB_STEP_SUMMARY"
       - name: Post the verdict on the pull request
         if: github.event_name == 'pull_request'
+        continue-on-error: true  # fork pull requests get a read-only token
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}

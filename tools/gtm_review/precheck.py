@@ -19,7 +19,7 @@ SECRET_PATTERNS = [
     ),
 ]
 EMAIL = re.compile(r"\b[A-Za-z0-9][A-Za-z0-9._%+-]*@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})\b")
-# Reserved names that can never be a real mailbox (RFC 2606), plus commit-trailer addresses.
+# Reserved names that can never be a real mailbox (RFC 2606), and GitHub's noreply aliases.
 ALLOWED_EMAIL_DOMAINS = (
     "example",
     "example.com",
@@ -27,9 +27,10 @@ ALLOWED_EMAIL_DOMAINS = (
     "test",
     "invalid",
     "localhost",
-    "anthropic.com",
     "users.noreply.github.com",
 )
+# Exact addresses used in commit trailers; anyone else at these domains is a real contact.
+ALLOWED_EMAILS = ("noreply@anthropic.com",)
 PRIVATE_PATHS = re.compile(r"^(?:data/private/|.*\.db$|\.env$|out/)")
 
 
@@ -49,27 +50,34 @@ class Finding:
 def added_lines(diff: str) -> list[tuple[str, int, str]]:
     """(file, new line number, text) for every line the diff adds."""
     out: list[tuple[str, int, str]] = []
-    path, line = "", 0
+    path, line, prev = "", 0, ""
     for raw in diff.splitlines():
-        if raw.startswith("+++ "):
+        if _is_new_file_header(raw, prev):
             target = raw[4:].strip()
             path = "" if target == "/dev/null" else target.removeprefix("b/")
         elif raw.startswith("@@"):
             match = re.search(r"\+(\d+)", raw)
             line = int(match.group(1)) if match else 0
-        elif raw.startswith("+") and not raw.startswith("+++"):
+        elif raw.startswith("+"):  # an added line, even one whose text starts with "++"
             out.append((path, line, raw[1:]))
             line += 1
         elif not raw.startswith("-"):
             line += 1
+        prev = raw
     return out
 
 
+def _is_new_file_header(raw: str, prev: str) -> bool:
+    """A `+++ ` line is a file header only right after its `--- ` line."""
+    return raw.startswith("+++ ") and prev.startswith("--- ")
+
+
 def changed_files(diff: str) -> list[str]:
-    files = []
+    files, prev = [], ""
     for raw in diff.splitlines():
-        if raw.startswith("+++ ") and raw[4:].strip() != "/dev/null":
+        if _is_new_file_header(raw, prev) and raw[4:].strip() != "/dev/null":
             files.append(raw[4:].strip().removeprefix("b/"))
+        prev = raw
     return files
 
 
@@ -107,7 +115,7 @@ def run(diff: str) -> list[Finding]:
                 )
                 break
         for match in EMAIL.finditer(text):
-            if not _allowed_email(match.group(1)):
+            if match.group(0).lower() not in ALLOWED_EMAILS and not _allowed_email(match.group(1)):
                 findings.append(
                     Finding(
                         "high",
