@@ -63,7 +63,7 @@ below runs on invented sample data and spends nothing.
 git clone https://github.com/JustIN-ai-sys/GTM-Pipeline.git && cd GTM-Pipeline
 pip install -e ".[dev]"
 bash scripts/demo.sh      # load -> score -> enrichment dry run -> export -> HubSpot dry run
-pytest -q                 # 98 tests (4 need a Postgres, see Warehouse)
+pytest -q                 # 102 tests (5 need a Postgres, see Warehouse)
 ```
 
 `scripts/demo.sh` writes into `out/` (git-ignored). Each command is printed before it runs, so
@@ -202,13 +202,14 @@ the score as a view, so anyone can query the ranking in SQL without running this
 pip install -e ".[warehouse]"
 export DATABASE_URL="postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres"
 gtm warehouse push            # dry run: row counts and the target host (never the password)
-gtm warehouse push --yes      # replaces the warehouse tables in one transaction
+gtm warehouse push --live --yes   # replaces the warehouse tables in one transaction
 ```
 
 - **Typed model** ([`sql/postgres/schema.sql`](sql/postgres/schema.sql)): the same tables as
-  SQLite with real types (dates, numbers), keys, foreign keys and checks.
+  SQLite with real types (dates, numbers), keys, foreign keys and checks, in their own `gtm`
+  schema: a project's existing tables in `public` are never touched (tested).
 - **The score as a view** ([`sql/postgres/account_scores.sql`](sql/postgres/account_scores.sql)):
-  `SELECT * FROM account_scores` gives today's ranking; `SET gtm.as_of = '2026-10-26'` replays
+  `SELECT * FROM gtm.account_scores` gives today's ranking; `SET gtm.as_of = '2026-10-26'` replays
   any date. A test runs both versions on the 36 sample companies and checks that every row,
   score and next action is identical.
 - **All or nothing**: one transaction; if anything fails, the warehouse keeps its previous
@@ -310,12 +311,12 @@ or the FullEnrich connector). Real data goes in
 
 ## Tests and CI
 
-`pytest` runs 98 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 102 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
 network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
 round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), the
 Clay import (matching, empty cells, confirmed kept), the webhook server on a local port, and the review agent with a fake model client (prechecks, verdict
-merging, refusals, eval scoring). Four tests need a real Postgres (`GTM_TEST_PG_URL`, a
+merging, refusals, eval scoring). Five tests need a real Postgres (`GTM_TEST_PG_URL`, a
 database whose name contains `test`): the warehouse push, its rerun, its rollback, row level
 security and the score parity with SQLite. CI starts a Postgres 16 service for them. The GitHub
 Actions workflow
@@ -359,7 +360,7 @@ command succeeds, not what it prints.
 
 1. Make the `review` check a required status check on `main`.
 2. Run `gtm push hubspot --live --yes` once on a real HubSpot portal.
-3. Run `gtm warehouse push --yes` against a Supabase project.
+3. Run `gtm warehouse push --live --yes` against a Supabase project.
 4. Back-test the score: do tier A accounts actually convert more? Adjust weights from the data.
 
 ## Layout
@@ -370,7 +371,7 @@ docs/       ICP and decisions
 sql/        schema, score, pipeline health
 src/        loader, scoring, enrich, clay, export, hubspot, warehouse, webhook, cli
 tools/      gtm_review: the pull request review agent, its rubric and evals
-tests/      98 tests
+tests/      102 tests
 scripts/    demo.sh, sample data generator, FullEnrich company search -> CSV
 data/sample fictional exports in Pipedrive's native header format
 ```

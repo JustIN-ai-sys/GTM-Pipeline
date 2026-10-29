@@ -83,6 +83,12 @@ def test_precheck_flags_a_password_in_a_url_but_not_a_placeholder():
     ]
 
 
+def test_an_email_after_a_url_scheme_without_a_password_is_still_flagged():
+    line = "ftp://" + "jane.doe" + "@realco.com/files"
+    diff = f"--- a/f\n+++ b/x.py\n@@ -0,0 +1,1 @@\n+{line}\n"
+    assert [f.rule for f in precheck.run(diff)] == ["R2"]
+
+
 def test_precheck_only_allows_the_exact_trailer_address():
     trailer = "noreply" + "@anthropic.com"
     contact = "jane" + "@anthropic.com"

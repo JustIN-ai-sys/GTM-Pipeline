@@ -21,7 +21,7 @@ SECRET_PATTERNS = [
     re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@]+:[^\s@<>{}$]{4,}@"),
 ]
 # user:password@host inside a URL is a credential (checked above), not an email address.
-URL_CREDENTIALS = re.compile(r"://[^\s/@]*$")
+URL_CREDENTIALS = re.compile(r"://[^\s/@:]+:[^\s/@]*$")
 EMAIL = re.compile(r"\b[A-Za-z0-9][A-Za-z0-9._%+-]*@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})\b")
 # Reserved names that can never be a real mailbox (RFC 2606), and GitHub's noreply aliases.
 ALLOWED_EMAIL_DOMAINS = (

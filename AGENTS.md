@@ -21,7 +21,7 @@ to work, then finds missing work emails through FullEnrich. Three layers, kept s
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                 # 98 tests (4 need GTM_TEST_PG_URL), standard library only at runtime
+pytest -q                 # 102 tests (5 need GTM_TEST_PG_URL), standard library only at runtime
 bash scripts/demo.sh      # whole pipeline on the sample data, spends nothing
 ruff check . && ruff format .
 gtm --db data/private/gtm.db init
@@ -32,7 +32,7 @@ gtm --db data/private/gtm.db enrich --limit 10 --report data/private/report.md  
 gtm --db data/private/gtm.db import-results data/private/raw/result.json  # saved JSON result
 gtm --db data/private/gtm.db export --format lemlist --out data/private/out/lemlist.csv
 gtm --db data/private/gtm.db push hubspot --min-score 40          # dry run; --live --yes writes
-gtm --db data/private/gtm.db warehouse push                       # dry run; --yes writes DATABASE_URL
+gtm --db data/private/gtm.db warehouse push                       # dry run; --live --yes writes
 gtm --db data/private/gtm.db import-clay data/private/clay.csv --column "Tech Stack"
 
 # review agent (needs pip install -e ".[review]" and ANTHROPIC_API_KEY; without it, prechecks only)

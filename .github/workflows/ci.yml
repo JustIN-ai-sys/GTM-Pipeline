@@ -48,4 +48,4 @@ jobs:
           gtm --db ci.db export --format pipedrive --out pipedrive.csv --min-score 45 \
             --include-unverified --as-of 2026-10-26
           gtm --db ci.db push hubspot --min-score 45 --include-unverified --as-of 2026-10-26
-          gtm --db ci.db warehouse push --url "$GTM_TEST_PG_URL" --yes
+          gtm --db ci.db warehouse push --url "$GTM_TEST_PG_URL" --live --yes

@@ -6,7 +6,7 @@ warehouse from it in ONE transaction (all tables or nothing), then (re)creates t
 
     pip install -e ".[warehouse]"
     gtm warehouse push                 # dry run: row counts, target host
-    gtm warehouse push --yes           # writes; reads DATABASE_URL
+    gtm warehouse push --live --yes    # writes into the `gtm` schema; reads DATABASE_URL
 
 The driver (psycopg) is an optional dependency; nothing else in the package needs it.
 """
@@ -64,6 +64,9 @@ DATE_COLUMNS = {
 }
 
 Connect = Callable[[str], Any]
+# Everything lives in its own schema, so a project's existing `people` or `deals` tables in
+# `public` are never touched (and Supabase's API, which serves `public`, does not list them).
+SCHEMA = "gtm"
 
 
 class WarehouseError(RuntimeError):
@@ -103,6 +106,8 @@ def push(conn: sqlite3.Connection, pg: Any) -> dict[str, int]:
     try:
         with pg.transaction():
             pg.execute("SET LOCAL TIME ZONE 'UTC'")
+            pg.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
+            pg.execute(f"SET LOCAL search_path TO {SCHEMA}")
             pg.execute(read_sql("postgres/schema.sql"))
             names = ", ".join(table for table, _ in TABLES)
             pg.execute(f"TRUNCATE {names}")

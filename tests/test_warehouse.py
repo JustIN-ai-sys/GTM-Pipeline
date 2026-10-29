@@ -43,6 +43,14 @@ def test_dry_run_counts_rows_and_writes_nothing(conn, capsys, monkeypatch):
     assert "Dry run: nothing was written" in out
 
 
+def test_live_without_yes_refuses(conn, capsys, monkeypatch):
+    _setup(conn)
+    monkeypatch.setenv("DATABASE_URL", _url("db.example.com:5432"))
+    db = conn.execute("PRAGMA database_list").fetchone()["file"]
+    assert cli.main(["--db", db, "warehouse", "push", "--live"]) == 2
+    assert "without --yes" in capsys.readouterr().err
+
+
 def test_connection_errors_do_not_leak_the_password():
     pytest.importorskip("psycopg")
     with pytest.raises(warehouse.WarehouseError) as exc:
@@ -63,6 +71,7 @@ needs_pg = pytest.mark.skipif(
 def pg():
     psycopg = pytest.importorskip("psycopg")
     connection = psycopg.connect(PG_URL, autocommit=True)
+    connection.execute("DROP SCHEMA IF EXISTS gtm CASCADE")
     connection.execute("DROP SCHEMA public CASCADE")
     connection.execute("CREATE SCHEMA public")
     yield connection
@@ -87,7 +96,16 @@ def test_push_copies_every_table_and_is_safe_to_rerun(conn, pg):
     second = warehouse.push(conn, pg)
     assert first == second == warehouse.counts(conn)
     for table, count in first.items():
-        assert pg.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == count
+        assert pg.execute(f"SELECT COUNT(*) FROM gtm.{table}").fetchone()[0] == count
+
+
+@needs_pg
+def test_tables_already_in_public_are_never_touched(conn, pg):
+    pg.execute("CREATE TABLE public.people (id int, note text)")
+    pg.execute("INSERT INTO public.people VALUES (1, 'kept as is')")
+    _sample(conn)
+    warehouse.push(conn, pg)
+    assert pg.execute("SELECT note FROM public.people").fetchall() == [("kept as is",)]
 
 
 @needs_pg
@@ -95,7 +113,7 @@ def test_postgres_score_matches_sqlite_row_for_row(conn, pg):
     _sample(conn)
     warehouse.push(conn, pg)
     pg.execute(f"SET gtm.as_of = '{AS_OF}'")
-    cursor = pg.execute("SELECT * FROM account_scores")
+    cursor = pg.execute("SELECT * FROM gtm.account_scores")
     columns = [c.name for c in cursor.description]
     remote = {row[0]: dict(zip(columns, row, strict=True)) for row in cursor.fetchall()}
     local = {row["org_id"]: dict(row) for row in scoring.score_accounts(conn, AS_OF)}
@@ -117,7 +135,7 @@ def test_every_table_has_row_level_security_on(conn, pg):
     warehouse.push(conn, pg)
     rows = pg.execute(
         "SELECT relname, relrowsecurity FROM pg_class "
-        "WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'"
+        "WHERE relnamespace = 'gtm'::regnamespace AND relkind = 'r'"
     ).fetchall()
     assert {name for name, _ in rows} == {table for table, _ in warehouse.TABLES}
     assert all(secured for _, secured in rows)
@@ -127,9 +145,9 @@ def test_every_table_has_row_level_security_on(conn, pg):
 def test_a_failed_push_leaves_the_warehouse_as_it_was(conn, pg, monkeypatch):
     _sample(conn)
     warehouse.push(conn, pg)
-    before = pg.execute("SELECT COUNT(*) FROM people").fetchone()[0]
+    before = pg.execute("SELECT COUNT(*) FROM gtm.people").fetchone()[0]
     broken = [*warehouse.TABLES[:-1], ("enrichment_runs", ["no_such_column"])]
     monkeypatch.setattr(warehouse, "TABLES", broken)
     with pytest.raises(warehouse.WarehouseError):
         warehouse.push(conn, pg)
-    assert pg.execute("SELECT COUNT(*) FROM people").fetchone()[0] == before
+    assert pg.execute("SELECT COUNT(*) FROM gtm.people").fetchone()[0] == before

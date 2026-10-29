@@ -139,3 +139,12 @@ def test_crm_email_gets_a_source(conn, tmp_path):
     loader.load_all(conn, orgs, people)
     row = conn.execute("SELECT email_source FROM people").fetchone()
     assert row["email_source"] == "crm_import"
+
+
+def test_clay_work_email_column_is_read(conn, tmp_path):
+    orgs = tmp_path / "o.csv"
+    orgs.write_text("Name\nAcme\n")
+    people = tmp_path / "p.csv"
+    people.write_text("First name,Last name,Organization,Work Email\nAda,L,Acme,ada@acme.example\n")
+    loader.load_all(conn, orgs, people)
+    assert conn.execute("SELECT email FROM people").fetchone()["email"] == "ada@acme.example"

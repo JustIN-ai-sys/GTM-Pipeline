@@ -1,4 +1,5 @@
 -- GTM warehouse schema (Postgres / Supabase). Same model as sql/schema.sql, with real types.
+-- Created in the `gtm` schema: `gtm warehouse push` sets the search_path before running this.
 -- Idempotent: safe to run on every push. `gtm warehouse push` refreshes every table from the
 -- local SQLite database in one transaction, so ids are kept as they are there.
 

@@ -3,7 +3,7 @@
 --
 -- The view scores as of today. For a reproducible score, set the date for the session first:
 --     SET gtm.as_of = '2026-10-26';
---     SELECT name, score, tier, next_action FROM account_scores LIMIT 10;
+--     SELECT name, score, tier, next_action FROM gtm.account_scores LIMIT 10;
 
 CREATE OR REPLACE FUNCTION gtm_as_of() RETURNS date
 LANGUAGE sql STABLE AS $$

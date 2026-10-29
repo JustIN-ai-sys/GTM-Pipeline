@@ -180,14 +180,17 @@ def cmd_warehouse(args: argparse.Namespace) -> int:
     conn = connect(args.db)
     url = args.url or os.environ.get("DATABASE_URL")
     target = warehouse.describe_target(url) if url else "no DATABASE_URL set"
-    print(f"Warehouse push to {target}:")
+    print(f"Warehouse push to {target}, schema {warehouse.SCHEMA}:")
     for table, count in warehouse.counts(conn).items():
         print(f"  {table:<20} {count} rows")
-    if not args.yes:
-        print("Dry run: nothing was written. Add --yes to replace the warehouse tables.")
+    if not args.live:
+        print("Dry run: nothing was written. Add --live --yes to replace the warehouse tables.")
         return 0
     if not url:
         print("DATABASE_URL is not set.", file=sys.stderr)
+        return 2
+    if not args.yes:
+        print("Refusing to copy contacts to the warehouse without --yes.", file=sys.stderr)
         return 2
     try:
         pg = warehouse.connect(url)
@@ -320,7 +323,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("action", choices=["push"])
     p.add_argument("--url", help="Postgres URL (default: the DATABASE_URL variable)")
-    p.add_argument("--yes", action="store_true", help="replace the warehouse tables")
+    p.add_argument("--live", action="store_true", help="really write to the warehouse")
+    p.add_argument("--yes", action="store_true", help="confirm that the tables are replaced")
     p.set_defaults(func=cmd_warehouse)
 
     p = sub.add_parser("serve", help="run the webhook receiver")
