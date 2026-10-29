@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   evals:
@@ -27,6 +28,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          set +e  # keep going on FAIL so the report still reaches the summary and the PR
           if [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "ANTHROPIC_API_KEY is not set: evals skipped." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -35,6 +37,13 @@ jobs:
           status=$?
           cat eval-report.md >> "$GITHUB_STEP_SUMMARY"
           exit $status
+      - name: Post the scores on the pull request
+        if: always() && github.event_name == 'pull_request' && hashFiles('eval-report.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bash .github/scripts/upsert-comment.sh "<!-- gtm-evals -->" eval-report.md
       - uses: actions/upload-artifact@v4
         if: always()
         with:

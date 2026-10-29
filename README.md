@@ -218,14 +218,14 @@ gtm push hubspot --min-score 40 --live --yes   # writes to HubSpot
 
 ## Review agent
 
-Every pull request is reviewed by an agent before it can be merged
+Every pull request is reviewed by an agent
 ([`.github/workflows/review.yml`](.github/workflows/review.yml)), the way a senior GTM engineer
 would review it: does the change protect money, people's data, the CRM, and the truth of what
 the README claims?
 
 1. **Prechecks** ([`tools/gtm_review/precheck.py`](tools/gtm_review/precheck.py)), no model:
    regexes on the added lines for API keys, real email addresses (anything not on an `.example`
-   domain) and private files (`data/private/`, `*.db`, `.env`). A hit blocks the merge.
+   domain) and private files (`data/private/`, `*.db`, `.env`). A hit makes the verdict `block`.
 2. **Model review** ([`tools/gtm_review/review.py`](tools/gtm_review/review.py)): Claude reads the
    [rubric](tools/gtm_review/rubric.md), the repo's own rules (`AGENTS.md`) and the diff, and
    returns a verdict (`approve`, `needs_human`, `block`) with findings tied to a rule (R1 spend
@@ -233,7 +233,8 @@ the README claims?
    as JSON checked against a schema. A refusal, a cut-off answer or a diff too large to read whole
    becomes `needs_human`, never a pass.
 3. **Gate**: the worst finding sets the verdict. The agent posts it as a comment on the pull
-   request and fails the check on `block`.
+   request and fails the check on `block`. The check stops a merge only once it is made a
+   required status check in the branch protection rules of `main`.
 
 **Evals** ([`tools/gtm_review/evals/`](tools/gtm_review/evals/)): 15 labelled diffs against this
 repo: 9 that must be blocked (live by default, a CRM write without `--yes`, a committed contact
@@ -286,9 +287,12 @@ command succeeds, not what it prints.
   nothing for the 2 not found. Its result format is now covered by the parser and a test, and
   re-importing the real result with `gtm import-results` gives the same 8/10.
 - **The HubSpot push is tested against a fake API only** until I run it on a real portal.
-- **The review agent's evals have not been run against the model yet**: they need the
-  `ANTHROPIC_API_KEY` secret. The unit tests run the agent with a fake client. I will put the
-  first real eval scores here.
+- **The review agent ran for real for the first time on 2026-10-29**, on its own pull request:
+  it reviewed the diff with the model and its evals passed their gate (no missed block, no false
+  block, at least 80% exact verdicts and rule recall). It flagged one overclaim in this very
+  README ("before it can be merged") and a CI bug that hid failing eval reports, both fixed in
+  the same pull request. The detailed scores are posted on each pull request that changes the
+  reviewer.
 - **No outreach has been sent from this project.** `gtm export` writes a file; the score has not
   been checked against replies or won deals yet (there are no deals on the real list).
 - SQLite, not a warehouse. Moving to Postgres or BigQuery means replacing the SQLite-specific

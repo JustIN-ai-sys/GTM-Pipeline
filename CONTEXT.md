@@ -43,16 +43,18 @@ Private dataset details (aggregates only):
   6 companies, 8 contacts. Not yet run on a real HubSpot portal (needs `HUBSPOT_TOKEN`, and
   `api.hubapi.com` is blocked in the cloud session: run it locally or allow the host).
 - Review agent (`tools/gtm_review/`, `.github/workflows/review.yml`): prechecks and verdict logic
-  are unit-tested with a fake model client. **The model review and the 15-case evals have not run
-  against the API yet**: they need the `ANTHROPIC_API_KEY` repository secret. Prechecks alone
-  flag only the committed-contacts case and none of the clean cases.
+  are unit-tested with a fake model client. **First real run on 2026-10-29** (PR #1, with the
+  `ANTHROPIC_API_KEY` repository secret): the model review ran (verdict `needs_human`: one README
+  overclaim, one workflow bug, one false positive about `gtm load` not creating the schema) and
+  the 15-case evals passed their gate. Exact scores: see the `gtm-evals` comment on the PR.
+  The check is not yet a required status check on `main`.
 - The webhook payload shape is not documented. The parser accepts the shapes in the docs; check
   it against one real payload.
 
 ## Next steps
 
-0. Add the `ANTHROPIC_API_KEY` secret, run the reviewer evals, record the scores here and in the
-   README, and open every change as a pull request so the agent reviews it.
+0. Make the `review` check required in the branch protection of `main`; record the exact eval
+   scores here; open every change as a pull request so the agent reviews it.
 1. Hit rate is above 6/10: enrich the remaining 3 eligible people (max 3 credits), then search
    people for the next companies in the ranking.
 2. Add suppressions (customers, opt-outs) before any larger run or any export.

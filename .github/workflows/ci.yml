@@ -22,6 +22,8 @@ jobs:
         run: ruff check .
       - name: Unit tests
         run: pytest -q
+      - name: README quick start (scripts/demo.sh)
+        run: bash scripts/demo.sh
       - name: End-to-end smoke test on the sample data
         run: |
           gtm --db ci.db init

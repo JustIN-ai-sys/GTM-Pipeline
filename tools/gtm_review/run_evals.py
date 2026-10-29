@@ -22,6 +22,7 @@ from typing import Any
 from gtm_review import review
 
 EVALS = Path(__file__).parent / "evals"
+MARKER = "<!-- gtm-evals -->"
 MIN_ACCURACY = 0.8
 MIN_RULE_RECALL = 0.8
 
@@ -69,6 +70,7 @@ def score(cases: list[dict[str, Any]], reviewer: Callable[[str], dict[str, Any]]
 def render(report: dict) -> str:
     m = report["metrics"]
     lines = [
+        MARKER,
         f"## Reviewer evals: {'PASS' if m['passed'] else 'FAIL'}",
         "",
         f"{m['cases']} cases · exact verdict {m['accuracy']:.0%} (min {MIN_ACCURACY:.0%}) · "
