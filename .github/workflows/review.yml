@@ -24,6 +24,17 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: pip install -e ".[review]"
+      - name: Use the reviewer and rules from the base branch
+        # A pull request must not be able to weaken the gate that reviews it.
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          if git cat-file -e "origin/$BASE_REF:tools/gtm_review/review.py" 2>/dev/null; then
+            git checkout "origin/$BASE_REF" -- tools/gtm_review AGENTS.md
+            echo "Reviewer, rubric and AGENTS.md taken from $BASE_REF."
+          else
+            echo "No reviewer on $BASE_REF yet: using this pull request's copy."
+          fi
       - name: Review the diff
         id: review
         env:

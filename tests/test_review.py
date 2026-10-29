@@ -109,8 +109,10 @@ def test_worst_finding_sets_the_verdict():
 
 def test_a_precheck_hit_blocks_even_if_the_model_approves():
     diff = f"+++ b/src/x.py\n@@ -1,1 +1,1 @@\n+contact = '{REAL_EMAIL}'\n"
-    result = review.review(diff, FakeClient(_answer("approve")))
+    client = FakeClient(_answer("approve"))
+    result = review.review(diff, client)
     assert result["verdict"] == "block" and result["prechecks"] == 1
+    assert client.calls == []  # the leaked line is never sent to the model
 
 
 def test_refusal_truncation_and_bad_json_never_pass():

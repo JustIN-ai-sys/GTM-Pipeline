@@ -104,8 +104,18 @@ def _needs_human(reason: str) -> dict[str, Any]:
 def review(diff: str, client: Any | None) -> dict[str, Any]:
     """Prechecks + model review, merged. `client=None` runs the prechecks only."""
     found = [f.as_dict() for f in precheck.run(diff)]
+    leak = any(f["severity"] == "high" for f in found)
     if not diff.strip():
         result = {"verdict": "approve", "summary": "Empty diff.", "findings": []}
+    elif leak:
+        # Do not send a key or a contact to one more third party: the precheck block is enough.
+        result = {
+            "verdict": "block",
+            "findings": [],
+            "summary": "Prechecks found a secret, personal data or a private file. "
+            "The model review was skipped so that content is not sent to the API.",
+        }
+        client = None
     elif client is None:
         result = {
             "verdict": "approve",

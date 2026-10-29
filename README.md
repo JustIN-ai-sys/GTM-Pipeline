@@ -287,12 +287,14 @@ command succeeds, not what it prints.
   nothing for the 2 not found. Its result format is now covered by the parser and a test, and
   re-importing the real result with `gtm import-results` gives the same 8/10.
 - **The HubSpot push is tested against a fake API only** until I run it on a real portal.
-- **The review agent ran for real for the first time on 2026-10-29**, on its own pull request:
-  it reviewed the diff with the model and its evals passed their gate (no missed block, no false
-  block, at least 80% exact verdicts and rule recall). It flagged one overclaim in this very
-  README ("before it can be merged") and a CI bug that hid failing eval reports, both fixed in
-  the same pull request. The detailed scores are posted on each pull request that changes the
-  reviewer.
+- **The review agent ran for real for the first time on 2026-10-29**, on its own pull request.
+  Evals: 15/15 exact verdicts, 0 missed blocks, 0 false blocks, the expected rule cited in 15/15.
+  That is one run on 15 cases I wrote myself, together with the rubric: a small, friendly set,
+  not proof that it generalises. Its first review flagged one overclaim in this very README
+  ("before it can be merged"), a CI bug that hid failing eval reports, and one false positive
+  (it thought `gtm load` did not create the schema). The second flagged that a pull request
+  could weaken its own reviewer and that a leaked key would still be sent to the model; both
+  are fixed. The scores are posted on each pull request that changes the reviewer.
 - **No outreach has been sent from this project.** `gtm export` writes a file; the score has not
   been checked against replies or won deals yet (there are no deals on the real list).
 - SQLite, not a warehouse. Moving to Postgres or BigQuery means replacing the SQLite-specific
@@ -305,7 +307,7 @@ command succeeds, not what it prints.
 
 ## Next steps
 
-1. Run the review agent's evals against the model and publish the scores.
+1. Make the `review` check a required status check on `main`.
 2. Run `gtm push hubspot --live --yes` once on a real HubSpot portal.
 3. Move the data to Postgres (Supabase).
 4. Back-test the score: do tier A accounts actually convert more? Adjust weights from the data.

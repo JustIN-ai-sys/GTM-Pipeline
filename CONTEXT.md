@@ -46,15 +46,17 @@ Private dataset details (aggregates only):
   are unit-tested with a fake model client. **First real run on 2026-10-29** (PR #1, with the
   `ANTHROPIC_API_KEY` repository secret): the model review ran (verdict `needs_human`: one README
   overclaim, one workflow bug, one false positive about `gtm load` not creating the schema) and
-  the 15-case evals passed their gate. Exact scores: see the `gtm-evals` comment on the PR.
+  the 15-case evals passed: 15/15 exact verdicts, 0 missed / 0 false blocks, rule recall 15/15
+  (one run, cases written by the same author as the rubric). The reviewer now runs from the base
+  branch, and skips the model when a precheck finds a secret or personal data.
   The check is not yet a required status check on `main`.
 - The webhook payload shape is not documented. The parser accepts the shapes in the docs; check
   it against one real payload.
 
 ## Next steps
 
-0. Make the `review` check required in the branch protection of `main`; record the exact eval
-   scores here; open every change as a pull request so the agent reviews it.
+0. Make the `review` check required in the branch protection of `main`; open every change as a
+   pull request so the agent reviews it; add harder eval cases written by someone else.
 1. Hit rate is above 6/10: enrich the remaining 3 eligible people (max 3 credits), then search
    people for the next companies in the ranking.
 2. Add suppressions (customers, opt-outs) before any larger run or any export.
