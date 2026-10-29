@@ -19,4 +19,7 @@
 | Review agent = regex prechecks, then the model | Secrets and real emails must never pass, whatever the model says; judgment calls go to the model. |
 | A refusal, a cut-off answer or an oversized diff is `needs_human`, never a pass | A review that did not happen must not look like an approval. |
 | Evals gate on zero missed blocks and zero false blocks | A missed block lets harm through; a false block teaches the team to ignore the agent. |
+| Warehouse = full refresh from SQLite, one transaction | Simple and always consistent; a partial sync could leave the team reading half-updated data. Incremental only when volume needs it. |
+| Score as a Postgres view, checked against SQLite by a test | Dashboards read the same ranking the tool uses; the parity test stops the two versions drifting apart. |
+| Row level security on, no policy, in Supabase | Supabase's public API would otherwise serve contacts and emails to anyone with the anon key. |
 | Map results by LinkedIn URL when `custom` is missing | The MCP connector and app exports return no `custom` field; LinkedIn URL is the key that was sent. |

@@ -21,7 +21,7 @@ to work, then finds missing work emails through FullEnrich. Three layers, kept s
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                 # 84 tests, standard library only at runtime
+pytest -q                 # 104 tests (5 need GTM_TEST_PG_URL), standard library only at runtime
 bash scripts/demo.sh      # whole pipeline on the sample data, spends nothing
 ruff check . && ruff format .
 gtm --db data/private/gtm.db init
@@ -32,6 +32,8 @@ gtm --db data/private/gtm.db enrich --limit 10 --report data/private/report.md  
 gtm --db data/private/gtm.db import-results data/private/raw/result.json  # saved JSON result
 gtm --db data/private/gtm.db export --format lemlist --out data/private/out/lemlist.csv
 gtm --db data/private/gtm.db push hubspot --min-score 40          # dry run; --live --yes writes
+gtm --db data/private/gtm.db warehouse push                       # dry run; --live --yes writes
+gtm --db data/private/gtm.db import-clay data/private/clay.csv --column "Tech Stack"
 
 # review agent (needs pip install -e ".[review]" and ANTHROPIC_API_KEY; without it, prechecks only)
 PYTHONPATH=tools python -m gtm_review.review --base origin/main   # review your branch
@@ -74,7 +76,8 @@ verified against a real account unless `CONTEXT.md` says so).
 ```
 sql/schema.sql            tables, ICP weights, signal rules
 sql/score_accounts.sql    the 0-100 score
-src/gtm_pipeline/         loader, scoring, enrich, export, hubspot, webhook, cli
+src/gtm_pipeline/         loader, scoring, enrich, clay, export, hubspot, warehouse, webhook, cli
+sql/postgres/             warehouse schema and the account_scores view
 tools/gtm_review/         PR review agent: prechecks, rubric, model review, evals
 tests/                    pytest, fake network
 data/sample/              invented demo data (committed)

@@ -49,8 +49,10 @@ both and maps results back by LinkedIn URL; a test covers it.
 | `gtm serve` | Small webhook receiver that stores the emails FullEnrich sends back. |
 | `gtm fetch <id>` | Pulls the results of one enrichment by id, as a fallback to the webhook. |
 | `gtm import-results <file>` | Stores a saved result (JSON from the app, the API or the MCP connector). |
+| `gtm import-clay <file>` | Turns a Clay table export (CSV) into dated, sourced CRM signals for the score. |
 | `gtm export` | Writes the contacts ready to work as a lemlist or Pipedrive CSV. **Sends nothing.** |
 | `gtm push hubspot` | Writes the same contacts, their companies and account scores to HubSpot. **Dry run by default.** |
+| `gtm warehouse push` | Copies every table to Postgres or Supabase and creates the `account_scores` view. **Dry run by default.** |
 
 ## Quick start (2 minutes)
 
@@ -61,7 +63,7 @@ below runs on invented sample data and spends nothing.
 git clone https://github.com/JustIN-ai-sys/GTM-Pipeline.git && cd GTM-Pipeline
 pip install -e ".[dev]"
 bash scripts/demo.sh      # load -> score -> enrichment dry run -> export -> HubSpot dry run
-pytest -q                 # 84 tests
+pytest -q                 # 104 tests (5 need a Postgres, see Warehouse)
 ```
 
 `scripts/demo.sh` writes into `out/` (git-ignored). Each command is printed before it runs, so
@@ -173,6 +175,53 @@ the same rules as `fetch`.
   suppression list.
 - **Errors do not leak the key.** HTTP errors raise a message with the status code only.
 
+## Clay
+
+Clay is where a GTM team enriches accounts. `gtm import-clay` brings a Clay table back as signals
+the score already uses:
+
+1. In Clay, import the companies (name and domain; `organizations.csv` has both) and add a
+   tech stack enrichment column.
+2. Export the table as CSV, then `gtm import-clay clay-export.csv --column "Tech Stack"`.
+3. `gtm score` re-ranks the accounts.
+
+Rows are matched by domain, else by exact company name; unknown companies are skipped, not
+created. A CRM named in the cell is `confirmed`, a filled cell without it is `not_found`, an
+empty cell stores nothing, and a `not_found` never replaces an earlier `confirmed`. People
+enriched in Clay load with `gtm load --people clay.csv --email-source clay_enrichment` (its
+`Work Email` column is read, and each email keeps Clay as its source). The match is on the
+vendor name, so any product named Salesforce (Marketing Cloud, Commerce Cloud) counts: read a
+`clay_tech_stack` signal as "uses this vendor", not "the sales team works in this CRM". What Clay
+reports is technology seen on a company's website, not proof the sales team uses that CRM: the
+source (`clay_tech_stack`) and the date are stored with each signal.
+
+## Warehouse (Postgres, Supabase)
+
+SQLite is the working copy on my laptop. The warehouse is where the team and the dashboards
+read: `gtm warehouse push` copies every table to Postgres (Supabase is Postgres) and creates
+the score as a view, so anyone can query the ranking in SQL without running this tool.
+
+```bash
+pip install -e ".[warehouse]"
+export DATABASE_URL="postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres"
+gtm warehouse push            # dry run: row counts and the target host (never the password)
+gtm warehouse push --live --yes   # replaces the warehouse tables in one transaction
+```
+
+- **Typed model** ([`sql/postgres/schema.sql`](sql/postgres/schema.sql)): the same tables as
+  SQLite with real types (dates, numbers), keys, foreign keys and checks, in their own `gtm`
+  schema: a project's existing tables in `public` are never touched (tested).
+- **The score as a view** ([`sql/postgres/account_scores.sql`](sql/postgres/account_scores.sql)):
+  `SELECT * FROM gtm.account_scores` gives today's ranking; `SET gtm.as_of = '2026-10-26'` replays
+  any date. A test runs both versions on the 36 sample companies and checks that every row,
+  score and next action is identical.
+- **All or nothing**: one transaction; if anything fails, the warehouse keeps its previous
+  data (tested).
+- **Locked down for Supabase**: row level security is on for every table with no policy, so
+  Supabase's public API returns nothing; only the direct database connection reads the data.
+  The tables hold contacts and emails.
+- It is a full refresh, not an incremental sync: fine for thousands of rows, not millions.
+
 ## Hand-off to outreach
 
 `gtm export --format lemlist|pipedrive --out FILE` writes the contacts that are ready to work,
@@ -265,12 +314,15 @@ or the FullEnrich connector). Real data goes in
 
 ## Tests and CI
 
-`pytest` runs 84 tests: parsing, idempotent loading, signals and suppressions, the score
+`pytest` runs 104 tests: parsing, idempotent loading, signals and suppressions, the score
 arithmetic, the enrichment filters, cooldown and report, batching, the API client with a fake
 network, both result formats (API docs and MCP connector), the export gates and the Pipedrive
 round trip, the HubSpot push against an in-memory fake API (matching, reruns, associations), the
-webhook server on a local port, and the review agent with a fake model client (prechecks, verdict
-merging, refusals, eval scoring). The GitHub Actions workflow
+Clay import (matching, empty cells, confirmed kept), the webhook server on a local port, and the review agent with a fake model client (prechecks, verdict
+merging, refusals, eval scoring). Five tests need a real Postgres (`GTM_TEST_PG_URL`, a
+database whose name contains `test`): push and rerun, tables in `public` left untouched,
+rollback, row level security, and the score parity with SQLite. CI starts a Postgres 16 service for them. The GitHub
+Actions workflow
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) lints with ruff, runs the tests on
 Python 3.11 to 3.13, then runs every command on the sample data. That last step checks that each
 command succeeds, not what it prints.
@@ -300,9 +352,8 @@ command succeeds, not what it prints.
   until `.github/` is protected (CODEOWNERS plus a required review, or a ruleset). The scores are posted on each pull request that changes the reviewer.
 - **No outreach has been sent from this project.** `gtm export` writes a file; the score has not
   been checked against replies or won deals yet (there are no deals on the real list).
-- SQLite, not a warehouse. Moving to Postgres or BigQuery means replacing the SQLite-specific
-  SQL (`julianday()`, two-argument `MIN`/`MAX`, `GROUP_CONCAT`, `INSERT OR IGNORE`,
-  `datetime('now')`) and the `sqlite3` connection layer.
+- **The warehouse push is tested against Postgres 16** (locally and in CI) and run once on the
+  real data into a local Postgres. Not yet run against a Supabase project.
 - The score is a transparent heuristic, not a model. The weights are my judgment, not tuned on
   conversion data.
 - Single-user: no authentication on `serve` beyond the shared token, no TLS (put it behind a
@@ -312,7 +363,7 @@ command succeeds, not what it prints.
 
 1. Make the `review` check a required status check on `main`.
 2. Run `gtm push hubspot --live --yes` once on a real HubSpot portal.
-3. Move the data to Postgres (Supabase).
+3. Run `gtm warehouse push --live --yes` against a Supabase project.
 4. Back-test the score: do tier A accounts actually convert more? Adjust weights from the data.
 
 ## Layout
@@ -321,9 +372,9 @@ command succeeds, not what it prints.
 AGENTS.md CLAUDE.md CONTEXT.md   context for coding agents
 docs/       ICP and decisions
 sql/        schema, score, pipeline health
-src/        loader, scoring, enrich, export, hubspot, webhook, cli
+src/        loader, scoring, enrich, clay, export, hubspot, warehouse, webhook, cli
 tools/      gtm_review: the pull request review agent, its rubric and evals
-tests/      84 tests
+tests/      104 tests
 scripts/    demo.sh, sample data generator, FullEnrich company search -> CSV
 data/sample fictional exports in Pipedrive's native header format
 ```
